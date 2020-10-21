@@ -108,9 +108,9 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 	//if (!NT_SUCCESS(status))
 	//	_InfoPrint("Error, object monitor haven't started");
 
-	///status = InitializeFSMiniFilter(DriverObject);
-	///if (!NT_SUCCESS(status))
-	///	_InfoPrint("Error, file-system mini-filter haven't started");
+	status = InitializeFSMiniFilter(DriverObject);
+	if (!NT_SUCCESS(status))
+		_InfoPrint("Error, file-system mini-filter haven't started");
 
 	status = InitializeRegistryFilter(DriverObject);
 	if (!NT_SUCCESS(status))
