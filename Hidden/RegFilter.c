@@ -4,8 +4,6 @@
 
 #include "RegFilter.h"
 #include "ExcludeList.h"
-//#include "PsMonitor.h"
-//#include "Configs.h"
 #include "Driver.h"
 #include "Helper.h"
 #include <Ntstrsafe.h>
@@ -15,21 +13,11 @@
 BOOLEAN g_regFilterInited = FALSE;
 
 ExcludeContext g_excludeRegKeyContext;
-//ExcludeContext g_excludeRegValueContext;
 
-// Use this variable for hard code path to registry keys that you would like to hide
-// For instance: L"\\REGISTRY\\MACHINE\\SOFTWARE\\test_key",
-// Notice: this array should be NULL terminated
-WCHAR g_excludeRegKey[256] = {
-	L"\\REGISTRY\\MACHINE\\SOFTWARE\\test1"
+WCHAR g_excludeRegKey[BUFSIZE] = {
+	0
+	//L"\\REGISTRY\\MACHINE\\SOFTWARE\\test1"
 };
-
-// Use this variable for hard code path to registry keys that you would like to hide
-// For instance: L"\\REGISTRY\\MACHINE\\SOFTWARE\\test_key\\test_value",
-// Notice: this array should be NULL terminated
-//CONST PWCHAR g_excludeRegValues[] = {
-//	NULL
-//};
 
 LARGE_INTEGER g_regCookie = { 0 };
 
@@ -40,7 +28,6 @@ BOOLEAN CheckRegistryKeyInExcludeList(PVOID RootObject, PUNICODE_STRING keyPath)
 	BOOLEAN found = FALSE;
 
 	// Check is the registry path matched to exclude list
-
 	if (keyPath->Length > sizeof(WCHAR) && keyPath->Buffer[0] == L'\\')
 	{
 		// Check absolute path
@@ -56,7 +43,6 @@ BOOLEAN CheckRegistryKeyInExcludeList(PVOID RootObject, PUNICODE_STRING keyPath)
 		USHORT totalSize;
 
 		// Obtain root key path
-
 		status = CmCallbackGetKeyObjectID(&g_regCookie, RootObject, NULL, &regPath);
 		if (!NT_SUCCESS(status))
 		{
@@ -65,7 +51,6 @@ BOOLEAN CheckRegistryKeyInExcludeList(PVOID RootObject, PUNICODE_STRING keyPath)
 		}
 
 		// Concatenate root path + sub key path
-
 		totalSize = regPath->Length + keyPath->Length + sizeof(WCHAR);
 		if (totalSize / sizeof(WCHAR) > LOCAL_BUF_SIZE)
 		{
@@ -112,9 +97,6 @@ NTSTATUS RegPreCreateKey(PVOID context, PREG_PRE_CREATE_KEY_INFORMATION info)
 {
 	UNREFERENCED_PARAMETER(context);
 
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
-
 	if (CheckExcludeListRegKey(g_excludeRegKeyContext, info->CompleteName))
 	{
 		_InfoPrint("Registry key is hidden: %wZ", info->CompleteName);
@@ -128,9 +110,6 @@ NTSTATUS RegPreCreateKeyEx(PVOID context, PREG_CREATE_KEY_INFORMATION info)
 {
 	UNREFERENCED_PARAMETER(context);
 
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
-
 	if (CheckRegistryKeyInExcludeList(info->RootObject, info->CompleteName))
 	{
 		_InfoPrint("Registry key is hidden: %wZ", info->CompleteName);
@@ -141,11 +120,8 @@ NTSTATUS RegPreCreateKeyEx(PVOID context, PREG_CREATE_KEY_INFORMATION info)
 }
 
 NTSTATUS RegPreOpenKey(PVOID context, PREG_PRE_OPEN_KEY_INFORMATION info)
-{//TODO: isn't used?
+{
 	UNREFERENCED_PARAMETER(context);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
 
 	if (CheckExcludeListRegKey(g_excludeRegKeyContext, info->CompleteName))
 	{
@@ -159,9 +135,6 @@ NTSTATUS RegPreOpenKey(PVOID context, PREG_PRE_OPEN_KEY_INFORMATION info)
 NTSTATUS RegPreOpenKeyEx(PVOID context, PREG_OPEN_KEY_INFORMATION info)
 {
 	UNREFERENCED_PARAMETER(context);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
 
 	if (CheckRegistryKeyInExcludeList(info->RootObject, info->CompleteName))
 	{
@@ -209,9 +182,6 @@ NTSTATUS RegPostEnumKey(PVOID context, PREG_POST_OPERATION_INFORMATION info)
 
 	if (!NT_SUCCESS(info->Status))
 		return STATUS_SUCCESS;
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
 
 	status = CmCallbackGetKeyObjectID(&g_regCookie, info->Object, NULL, &regPath);
 	if (!NT_SUCCESS(status))
@@ -312,217 +282,6 @@ BOOLEAN GetNameFromEnumValuePreInfo(KEY_VALUE_INFORMATION_CLASS infoClass, PVOID
 	return TRUE;
 }
 
-/*
-NTSTATUS RegPostEnumValue(PVOID context, PREG_POST_OPERATION_INFORMATION info)
-{
-    PREG_ENUMERATE_VALUE_KEY_INFORMATION preInfo;
-	PCUNICODE_STRING regPath;
-	UNICODE_STRING keyName;
-	UINT32 incIndex;
-	NTSTATUS status;
-
-	UNREFERENCED_PARAMETER(context);
-
-	if (!NT_SUCCESS(info->Status))
-		return STATUS_SUCCESS;
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
-
-	status = CmCallbackGetKeyObjectID(&g_regCookie, info->Object, NULL, &regPath);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Error, registry name query failed with code:%08x", status);
-		return STATUS_SUCCESS;
-	}
-
-    preInfo = (PREG_ENUMERATE_VALUE_KEY_INFORMATION)info->PreInformation;
-
-    if (!GetNameFromEnumValuePreInfo(preInfo->KeyValueInformationClass, preInfo->KeyValueInformation, &keyName))
-		return STATUS_SUCCESS;
-
-	incIndex = 0;
-    if (CheckExcludeListRegKeyValueName(g_excludeRegValueContext, (PUNICODE_STRING)regPath, &keyName, &incIndex))
-		_InfoPrint("Registry value is going to be hidden in: %wZ (inc: %d)", regPath, incIndex);
-
-	if (incIndex > 0)
-	{
-		HANDLE Key;
-		ULONG resLen, i;
-		BOOLEAN infinite = TRUE;
-		PVOID tempBuffer;
-
-		status = ObOpenObjectByPointer(info->Object, OBJ_KERNEL_HANDLE, NULL, KEY_ALL_ACCESS, *CmKeyObjectType, KernelMode, &Key);
-		if (!NT_SUCCESS(status))
-		{
-			_InfoPrint("Error, ObOpenObjectByPointer() failed with code:%08x", status);
-			return STATUS_SUCCESS;
-		}
-
-		tempBuffer = (LPWSTR)ExAllocatePoolWithTag(PagedPool, preInfo->Length, FILTER_ALLOC_TAG);
-		if (tempBuffer)
-		{
-
-			for (i = 0; infinite; i++)
-			{
-                status = ZwEnumerateValueKey(Key, preInfo->Index + incIndex, preInfo->KeyValueInformationClass, tempBuffer, preInfo->Length, &resLen);
-				if (!NT_SUCCESS(status))
-					break;
-
-                if (!GetNameFromEnumValuePreInfo(preInfo->KeyValueInformationClass, tempBuffer, &keyName))
-					break;
-
-				if (!CheckExcludeListRegKeyValueName(g_excludeRegValueContext, (PUNICODE_STRING)regPath, &keyName, &incIndex))
-				{
-					*preInfo->ResultLength = resLen;
-					__try
-					{
-                        RtlCopyMemory(preInfo->KeyValueInformation, tempBuffer, resLen);
-					}
-					__except (EXCEPTION_EXECUTE_HANDLER)
-					{
-						_InfoPrint("Warning, can't copy new key information");
-					}
-
-					break;
-				}
-			}
-
-			ExFreePoolWithTag(tempBuffer, FILTER_ALLOC_TAG);
-		}
-		else
-		{
-			status = STATUS_SUCCESS;
-		}
-
-		info->ReturnStatus = status;
-
-		ZwClose(Key);
-	}
-
-	return STATUS_SUCCESS;
-}
-
-
-NTSTATUS RegPreSetValue(PVOID context, PREG_SET_VALUE_KEY_INFORMATION info)
-{
-	NTSTATUS status;
-	PCUNICODE_STRING regPath;
-	UINT32 incIndex;
-
-	UNREFERENCED_PARAMETER(context);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
-
-	status = CmCallbackGetKeyObjectID(&g_regCookie, info->Object, NULL, &regPath);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Error, registry name query failed with code:%08x", status);
-		return STATUS_SUCCESS;
-	}
-
-	incIndex = 0;
-	if (CheckExcludeListRegKeyValueName(g_excludeRegValueContext, (PUNICODE_STRING)regPath, info->ValueName, &incIndex))
-	{
-		_InfoPrint("Registry value has been hidden: %wZ\\%wZ (inc: %d)", regPath, info->ValueName, incIndex);
-		return STATUS_NOT_FOUND;
-	}
-
-	return STATUS_SUCCESS;
-}
-
-
-NTSTATUS RegPreDeleteValue(PVOID context, PREG_DELETE_VALUE_KEY_INFORMATION info)
-{
-	NTSTATUS status;
-	PCUNICODE_STRING regPath;
-	UINT32 incIndex;
-
-	UNREFERENCED_PARAMETER(context);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
-
-	status = CmCallbackGetKeyObjectID(&g_regCookie, info->Object, NULL, &regPath);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Error, registry name query failed with code:%08x", status);
-		return STATUS_SUCCESS;
-	}
-
-	incIndex = 0;
-	if (CheckExcludeListRegKeyValueName(g_excludeRegValueContext, (PUNICODE_STRING)regPath, info->ValueName, &incIndex))
-	{
-		_InfoPrint("Registry value has been hidden: %wZ\\%wZ (inc: %d)", regPath, info->ValueName, incIndex);
-		return STATUS_NOT_FOUND;
-	}
-
-	return STATUS_SUCCESS;
-}
-
-
-NTSTATUS RegPreQueryValue(PVOID context, PREG_QUERY_VALUE_KEY_INFORMATION info)
-{
-	NTSTATUS status;
-	PCUNICODE_STRING regPath;
-	UINT32 incIndex;
-
-	UNREFERENCED_PARAMETER(context);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
-
-	status = CmCallbackGetKeyObjectID(&g_regCookie, info->Object, NULL, &regPath);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Error, registry name query failed with code:%08x", status);
-		return STATUS_SUCCESS;
-	}
-
-	incIndex = 0;
-	if (CheckExcludeListRegKeyValueName(g_excludeRegValueContext, (PUNICODE_STRING)regPath, info->ValueName, &incIndex))
-	{
-		_InfoPrint("Registry value has been hidden: %wZ\\%wZ (inc: %d)", regPath, info->ValueName, incIndex);
-		return STATUS_NOT_FOUND;
-	}
-
-	return STATUS_SUCCESS;
-}
-
-
-NTSTATUS RegPreQueryMultipleValue(PVOID context, PREG_QUERY_MULTIPLE_VALUE_KEY_INFORMATION info)
-{
-	NTSTATUS status;
-	PCUNICODE_STRING regPath;
-	UINT32 incIndex, i;
-
-	UNREFERENCED_PARAMETER(context);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return STATUS_SUCCESS;
-
-	status = CmCallbackGetKeyObjectID(&g_regCookie, info->Object, NULL, &regPath);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Error, registry name query failed with code:%08x", status);
-		return STATUS_SUCCESS;
-	}
-
-	for (i = 0; i < info->EntryCount; i++)
-	{
-		incIndex = 0;
-		if (CheckExcludeListRegKeyValueName(g_excludeRegValueContext, (PUNICODE_STRING)regPath, info->ValueEntries[i].ValueName, &incIndex))
-		{
-			_InfoPrint("Registry value has been hidden: %wZ\\%wZ (inc: %d)", regPath, info->ValueEntries[i].ValueName, incIndex);
-			return STATUS_NOT_FOUND;
-		}
-	}
-
-	return STATUS_SUCCESS;
-}
-*/
-
 _Function_class_(EX_CALLBACK_FUNCTION)
 NTSTATUS RegistryFilterCallback(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
 {
@@ -549,21 +308,6 @@ NTSTATUS RegistryFilterCallback(PVOID CallbackContext, PVOID Argument1, PVOID Ar
 	case RegNtPostEnumerateKey:
 		status = RegPostEnumKey(CallbackContext, (PREG_POST_OPERATION_INFORMATION)Argument2);
 		break;
-	//case RegNtPostEnumerateValueKey:
-	//	status = RegPostEnumValue(CallbackContext, (PREG_POST_OPERATION_INFORMATION)Argument2);
-	//	break;
-	//case RegNtSetValueKey:
-	//	status = RegPreSetValue(CallbackContext, (PREG_SET_VALUE_KEY_INFORMATION)Argument2);
-	//	break;
-	//case RegNtPreDeleteValueKey:
-	//	status = RegPreDeleteValue(CallbackContext, (PREG_DELETE_VALUE_KEY_INFORMATION)Argument2);
-	//	break;
-	//case RegNtPreQueryValueKey:
-	//	status = RegPreQueryValue(CallbackContext, (PREG_QUERY_VALUE_KEY_INFORMATION)Argument2);
-	//	break;
-	//case RegNtPreQueryMultipleValueKey:
-	//	status = RegPreQueryMultipleValue(CallbackContext, (PREG_QUERY_MULTIPLE_VALUE_KEY_INFORMATION)Argument2);
-	//	break;
 	default:
 		status = STATUS_SUCCESS;
 		break;
@@ -600,7 +344,6 @@ NTSTATUS AddCurrentControlSetVariants(PUNICODE_STRING KeyPath, ExcludeContext Co
 	__try
 	{
 		// ControlSet001
-
 		if (tailed)
 		{
 			tail.Buffer = KeyPath->Buffer + (currVersion.Length / sizeof(WCHAR)) + 1;
@@ -617,7 +360,6 @@ NTSTATUS AddCurrentControlSetVariants(PUNICODE_STRING KeyPath, ExcludeContext Co
 			return status;
 
 		// ControlSet002
-
 		if (tailed)
 			RtlUnicodeStringPrintf(&currVersionXXX, L"\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet002\\%wZ", &tail);
 		else
@@ -645,52 +387,21 @@ VOID LoadConfigRegKeysCallback(PUNICODE_STRING Str, PVOID Params)
 	AddHiddenRegKey(Str, &id);
 }
 
-//VOID LoadConfigRegValuesCallback(PUNICODE_STRING Str, PVOID Params)
-//{
-//	ExcludeEntryId id;
-//	UNREFERENCED_PARAMETER(Params);
-//	AddHiddenRegValue(Str, &id);
-//}
-
 NTSTATUS InitializeRegistryFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
 	UNICODE_STRING altitude, str;
 	ExcludeEntryId id;
-	//UINT32 i;
 
 	// Fill exclude lists
-
 	status = InitializeExcludeListContext(&g_excludeRegKeyContext, ExcludeRegKey);
 	if (!NT_SUCCESS(status))
 	{
 		_InfoPrint("Error, exclude registry key list initialization failed with code:%08x", status);
 		return status;
 	}
-
-	//for (i = 0; g_excludeRegKeys[i]; i++)
-	//{
-		RtlInitUnicodeString(&str, g_excludeRegKey);
-		AddHiddenRegKey(&str, &id);
-	//}
-
-	//CfgEnumConfigsTable(HideRegKeysTable, &LoadConfigRegKeysCallback, NULL);
-
-	//status = InitializeExcludeListContext(&g_excludeRegValueContext, ExcludeRegValue);
-	//if (!NT_SUCCESS(status))
-	//{
-	//	_InfoPrint("Error, exclude registry value list initialization failed with code:%08x", status);
-	//	DestroyExcludeListContext(g_excludeRegKeyContext);
-	//	return status;
-	//}
-	//
-	//for (i = 0; g_excludeRegValues[i]; i++)
-	//{
-	//	RtlInitUnicodeString(&str, g_excludeRegValues[i]);
-	//	AddHiddenRegValue(&str, &id);
-	//}
-	//
-	//CfgEnumConfigsTable(HideRegValuesTable, &LoadConfigRegValuesCallback, NULL);
+	RtlInitUnicodeString(&str, g_excludeRegKey);
+	AddHiddenRegKey(&str, &id);
 
 	// Register registry filter
 
@@ -701,7 +412,6 @@ NTSTATUS InitializeRegistryFilter(PDRIVER_OBJECT DriverObject)
 	{
 		_InfoPrint("Error, registry filter registration failed with code:%08x", status);
 		DestroyExcludeListContext(g_excludeRegKeyContext);
-		//DestroyExcludeListContext(g_excludeRegValueContext);
 		return status;
 	}
 
@@ -722,7 +432,6 @@ NTSTATUS DestroyRegistryFilter()
 		_InfoPrint("Warning, registry filter unregistration failed with code:%08x", status);
 
 	DestroyExcludeListContext(g_excludeRegKeyContext);
-	//DestroyExcludeListContext(g_excludeRegValueContext);
 
 	g_regFilterInited = FALSE;
 	_InfoPrint("Deinitialization is completed");
@@ -753,28 +462,3 @@ NTSTATUS RemoveAllHiddenRegKeys()
 {
 	return RemoveAllExcludeListEntries(g_excludeRegKeyContext);
 }
-
-//NTSTATUS AddHiddenRegValue(PUNICODE_STRING ValuePath, PULONGLONG ObjId)
-//{
-//	NTSTATUS status;
-//
-//	status = AddExcludeListRegistryValue(g_excludeRegValueContext, ValuePath, ObjId, 0);
-//	if (NT_SUCCESS(status))
-//	{
-//		status = AddCurrentControlSetVariants(ValuePath, g_excludeRegValueContext, *ObjId, &AddExcludeListRegistryValue);
-//		if (!NT_SUCCESS(status))
-//			RemoveHiddenRegValue(*ObjId);
-//	}
-//
-//	return status;
-//}
-//
-//NTSTATUS RemoveHiddenRegValue(ULONGLONG ObjId)
-//{
-//	return RemoveExcludeListEntry(g_excludeRegValueContext, ObjId);
-//}
-//
-//NTSTATUS RemoveAllHiddenRegValues()
-//{
-//	return RemoveAllExcludeListEntries(g_excludeRegValueContext);
-//}

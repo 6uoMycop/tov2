@@ -6,16 +6,13 @@
 #include "ExcludeList.h"
 #include "FsFilter.h"
 #include "Helper.h"
-//#include "PsMonitor.h"
 #include "Driver.h"
-//#include "Configs.h"
 
 #define FSFILTER_ALLOC_TAG 'DHlF'
 
 NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS Flags, DEVICE_TYPE VolumeDeviceType, FLT_FILESYSTEM_TYPE VolumeFilesystemType);
 
 FLT_PREOP_CALLBACK_STATUS FltCreatePreOperation(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects, _Flt_CompletionContext_Outptr_ PVOID *CompletionContext);
-//FLT_POSTOP_CALLBACK_STATUS FltCreatePostOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID CompletionContext, FLT_POST_OPERATION_FLAGS Flags);
 FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID *CompletionContext);
 FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID CompletionContext, FLT_POST_OPERATION_FLAGS Flags);
 
@@ -32,7 +29,7 @@ const FLT_CONTEXT_REGISTRATION Contexts[] = {
 };
 
 CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
-	{ IRP_MJ_CREATE, 0, FltCreatePreOperation,  /*FltCreatePostOperation*/ NULL },
+	{ IRP_MJ_CREATE, 0, FltCreatePreOperation, NULL },
 	{ IRP_MJ_DIRECTORY_CONTROL, 0, FltDirCtrlPreOperation, FltDirCtrlPostOperation },
 	{ IRP_MJ_OPERATION_END }
 };
@@ -57,21 +54,11 @@ BOOLEAN g_fsMonitorInited = FALSE;
 PFLT_FILTER gFilterHandle = NULL;
 
 ExcludeContext g_excludeFileContext;
-//ExcludeContext g_excludeDirectoryContext;
 
-// Use this variable for hard code full file paths that you would like to hide
-// For instance: L"\\Device\\HarddiskVolume1\\Windows\\System32\\calc.exe"
-// Notice: this array should be NULL terminated
-WCHAR g_excludeFile[256] = {
-	L"\\Device\\HarddiskVolume2\\Users\\Public\\Documents\\grabber1.exe"
+WCHAR g_excludeFile[BUFSIZE] = {
+	0
+	//L"\\Device\\HarddiskVolume2\\Users\\Public\\Documents\\grabber1.exe"
 };
-
-// Use this variable for hard code full directory paths that you would like to hide
-// For instance: L"\\Device\\HarddiskVolume1\\Windows\\System32\\mysecretdir"
-// Notice: this array should be NULL terminated
-//CONST PWCHAR g_excludeDirs[] = {
-//	NULL
-//};
 
 NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS Flags, DEVICE_TYPE VolumeDeviceType, FLT_FILESYSTEM_TYPE VolumeFilesystemType)
 {
@@ -95,7 +82,7 @@ FLT_PREOP_CALLBACK_STATUS FltCreatePreOperation(
 	_In_ PCFLT_RELATED_OBJECTS FltObjects,
 	_Flt_CompletionContext_Outptr_ PVOID *CompletionContext)
 {
-	UINT32 /*disposition,*/ options;
+	UINT32 options;
 	PFLT_FILE_NAME_INFORMATION fltName;
 	NTSTATUS status;
 	BOOLEAN neededPrevent = FALSE;
@@ -106,13 +93,7 @@ FLT_PREOP_CALLBACK_STATUS FltCreatePreOperation(
 	if (!IsDriverEnabled())
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
-	///_InfoPrint("%wZ (options:%x)", &Data->Iopb->TargetFileObject->FileName, Data->Iopb->Parameters.Create.Options);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//	return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
 	options = Data->Iopb->Parameters.Create.Options & FILE_DIRECTORY_FILE;
-	//disposition = (Data->Iopb->Parameters.Create.Options & 0xFF000000) >> 24;
 
 	status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED, &fltName);
 	if (!NT_SUCCESS(status))
@@ -130,10 +111,6 @@ FLT_PREOP_CALLBACK_STATUS FltCreatePreOperation(
 		if (CheckExcludeListDirectory(g_excludeFileContext, &fltName->Name))
 			neededPrevent = TRUE;
 	}
-
-	// If it is create directory/file event
-	// if (!neededPrevent && CheckExcludeListDirectory(g_excludeDirectoryContext, &fltName->Name))
-	// 	neededPrevent = TRUE;
 
 	FltReleaseFileNameInformation(fltName);
 
@@ -193,12 +170,6 @@ FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFL
 		return FLT_POSTOP_FINISHED_PROCESSING;
 
 	_InfoPrint("FltDirCtrlPostOperation: %wZ", &Data->Iopb->TargetFileObject->FileName);
-
-	//if (IsProcessExcluded(PsGetCurrentProcessId()))
-	//{
-	//	_InfoPrint("Operation is skipped for excluded process");
-	//	return FLT_POSTOP_FINISHED_PROCESSING;
-	//}
 
 	status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED, &fltName);
 	if (!NT_SUCCESS(status))
@@ -670,7 +641,6 @@ NTSTATUS CleanFileNamesInformation(PFILE_NAMES_INFORMATION info, PFLT_FILE_NAME_
 		fileName.Length = (USHORT)info->FileNameLength;
 		fileName.MaximumLength = (USHORT)info->FileNameLength;
 
-		//TODO: check, can there be directories?
 		if (CheckExcludeListDirFile(g_excludeFileContext, &fltName->Name, &fileName))
 		{
 			BOOLEAN retn = FALSE;
@@ -740,22 +710,13 @@ VOID LoadConfigFilesCallback(PUNICODE_STRING Str, PVOID Params)
 	AddHiddenFile(Str, &id);
 }
 
-//VOID LoadConfigDirsCallback(PUNICODE_STRING Str, PVOID Params)
-//{
-//	ULONGLONG id;
-//	UNREFERENCED_PARAMETER(Params);
-//	AddHiddenDir(Str, &id);
-//}
-
 NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
 	UNICODE_STRING str;
-	//UINT32 i;
 	ExcludeEntryId id;
 
-	// Initialize and fill exclude file\dir lists 
-
+	// Initialize and fill exclude file\dir lists
 	status = InitializeExcludeListContext(&g_excludeFileContext, ExcludeFile);
 	if (!NT_SUCCESS(status))
 	{
@@ -763,29 +724,8 @@ NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 		return status;
 	}
 
-	//for (i = 0; g_excludeFiles[i]; i++)
-	//{
-		RtlInitUnicodeString(&str, g_excludeFile);
-		AddExcludeListFile(g_excludeFileContext, &str, &id, 0);
-	//}
-
-	//CfgEnumConfigsTable(HideFilesTable, &LoadConfigFilesCallback, NULL);
-
-	//status = InitializeExcludeListContext(&g_excludeDirectoryContext, ExcludeDirectory);
-	//if (!NT_SUCCESS(status))
-	//{
-	//	_InfoPrint("Exclude file list initialization failed with code:%08x", status);
-	//	DestroyExcludeListContext(g_excludeFileContext);
-	//	return status;
-	//}
-	//
-	//for (i = 0; g_excludeDirs[i]; i++)
-	//{
-	//	RtlInitUnicodeString(&str, g_excludeDirs[i]);
-	//	AddExcludeListDirectory(g_excludeDirectoryContext, &str, &id, 0);
-	//}
-	//
-	//CfgEnumConfigsTable(HideDirsTable, &LoadConfigDirsCallback, NULL);
+	RtlInitUnicodeString(&str, g_excludeFile);
+	AddExcludeListFile(g_excludeFileContext, &str, &id, 0);
 
 	// Filesystem mini-filter initialization
 
@@ -807,7 +747,6 @@ NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 	if (!NT_SUCCESS(status))
 	{
 		DestroyExcludeListContext(g_excludeFileContext);
-		//DestroyExcludeListContext(g_excludeDirectoryContext);
 		return status;
 	}
 
@@ -826,7 +765,6 @@ NTSTATUS DestroyFSMiniFilter()
 	gFilterHandle = NULL;
 
 	DestroyExcludeListContext(g_excludeFileContext);
-	//DestroyExcludeListContext(g_excludeDirectoryContext);
 	g_fsMonitorInited = FALSE;
 
 	_InfoPrint("Deitialization is completed");
@@ -889,60 +827,3 @@ NTSTATUS RemoveAllHiddenFiles()
 
 	return status;
 }
-
-//NTSTATUS AddHiddenDir(PUNICODE_STRING DirPath, PULONGLONG ObjId)
-//{
-//	const USHORT maxBufSize = DirPath->Length + NORMALIZE_INCREAMENT;
-//	UNICODE_STRING normalized;
-//	NTSTATUS status;
-//
-//	normalized.Buffer = (PWCH)ExAllocatePoolWithTag(PagedPool, maxBufSize, FSFILTER_ALLOC_TAG);
-//	normalized.Length = 0;
-//	normalized.MaximumLength = maxBufSize;
-//
-//	if (!normalized.Buffer)
-//	{
-//		_InfoPrint("Error, can't allocate buffer");
-//		return STATUS_MEMORY_NOT_ALLOCATED;
-//	}
-//
-//	status = NormalizeDevicePath(DirPath, &normalized);
-//	if (!NT_SUCCESS(status))
-//	{
-//		_InfoPrint("Path normalization failed with code:%08x, path:%wZ\n", status, DirPath);
-//		ExFreePoolWithTag(normalized.Buffer, FSFILTER_ALLOC_TAG);
-//		return status;
-//	}
-//
-//	status = AddExcludeListDirectory(g_excludeDirectoryContext, &normalized, ObjId, 0);
-//	if (NT_SUCCESS(status))
-//		_InfoPrint("Added hidden dir:%wZ", &normalized);
-//	else
-//		_InfoPrint("Adding hidden dir failed with code:%08x, path:%wZ", status, &normalized);
-//
-//	ExFreePoolWithTag(normalized.Buffer, FSFILTER_ALLOC_TAG);
-//
-//	return status;
-//}
-//
-//NTSTATUS RemoveHiddenDir(ULONGLONG ObjId)
-//{
-//	NTSTATUS status = RemoveExcludeListEntry(g_excludeDirectoryContext, ObjId);
-//	if (NT_SUCCESS(status))
-//		_InfoPrint("Hidden dir is removed, id:%lld", ObjId);
-//	else
-//		_InfoPrint("Can't remove hidden dir, code:%08x, id:%lld", status, ObjId);
-//
-//	return status;
-//}
-//
-//NTSTATUS RemoveAllHiddenDirs()
-//{
-//	NTSTATUS status = RemoveAllExcludeListEntries(g_excludeDirectoryContext);
-//	if (NT_SUCCESS(status))
-//		_InfoPrint("All hidden dirs are removed");
-//	else
-//		_InfoPrint("Can't remove all hidden dirs, code:%08x", status);
-//
-//	return status;
-//}

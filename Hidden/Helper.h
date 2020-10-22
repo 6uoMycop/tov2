@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Ntddk.h>
+#define BUFSIZE 256
 
 typedef enum _SYSTEM_INFORMATION_CLASS {
 	SystemBasicInformation = 0,
@@ -78,13 +79,6 @@ VOID FreeInformation(PVOID Buffer);
 #define NORMALIZE_INCREAMENT (USHORT)0x200
 
 NTSTATUS NormalizeDevicePath(PCUNICODE_STRING Path, PUNICODE_STRING Normalized);
-
-//#define _LogMsg(lvl, lvlname, frmt, ...) DbgPrintEx(DPFLTR_IHVDRIVER_ID, lvl , "hidden!" __FUNCTION__ "[irql:%d,pid:%d][" lvlname "]: " frmt "\n", (ULONG)KeGetCurrentIrql(), (ULONG)PsGetCurrentProcessId(), __VA_ARGS__)
-//
-//#define _InfoPrint(frmt,   ...) _LogMsg(DPFLTR_ERROR_LEVEL,   "error",   frmt, __VA_ARGS__)
-//#define _InfoPrint(frmt, ...) _LogMsg(DPFLTR_WARNING_LEVEL, "warning", frmt, __VA_ARGS__)
-//#define _InfoPrint(frmt,   ...) _LogMsg(DPFLTR_TRACE_LEVEL,   "trace",   frmt, __VA_ARGS__)
-//#define _InfoPrint(frmt,    ...) _LogMsg(DPFLTR_INFO_LEVEL,    "info",    frmt, __VA_ARGS__)
 
 #define DRIVER_NAME             L"RegFltr"
 #define _InfoPrint(str, ...)        \

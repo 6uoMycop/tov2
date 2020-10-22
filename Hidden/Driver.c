@@ -1,22 +1,20 @@
 #include <fltKernel.h>
 #include <Ntddk.h>
-//#include "ExcludeList.h"
+#include <stdlib.h>
 
 #include "RegFilter.h"
 #include "FsFilter.h"
-//#include "PsMonitor.h"
-//#include "Device.h"
 #include "Driver.h"
-//#include "Configs.h"
 #include "Helper.h"
 
 #define DRIVER_ALLOC_TAG 'nddH'
 
 PDRIVER_OBJECT g_driverObject = NULL;
-
 volatile LONG g_driverActive = FALSE;
-
-// =========================================================================================
+ULONGLONG g_hiddenRegConfigId = 0;
+ULONGLONG g_hiddenDriverFileId = 0;
+extern WCHAR g_excludeFile[BUFSIZE];
+extern WCHAR g_excludeRegKey[BUFSIZE];
 
 VOID EnableDisableDriver(BOOLEAN enabled)
 {
@@ -28,53 +26,58 @@ BOOLEAN IsDriverEnabled()
 	return (g_driverActive ? TRUE : FALSE);
 }
 
-// =========================================================================================
+// C:\conf.txt :
+// <registry key>
+// <exe name>
+BOOLEAN readConfFile()
+{
+	UNICODE_STRING filename;
+	OBJECT_ATTRIBUTES fileAttr;
+	IO_STATUS_BLOCK fhStatus;
+	HANDLE fh;
+	NTSTATUS status;
+	LARGE_INTEGER byteOffset;
+	char cBuf[BUFSIZE] = { 0 }, *p = NULL;
+	//WCHAR wRegKey[BUFSIZE] = { 0 }, wExeName[BUFSIZE] = { 0 };
 
-ULONGLONG g_hiddenRegConfigId = 0;
-ULONGLONG g_hiddenDriverFileId = 0;
+	RtlInitUnicodeString(&filename, L"\\Device\\HarddiskVolume2\\conf.txt");
 
-//NTSTATUS InitializeStealthMode(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
-//{
-//	PLDR_DATA_TABLE_ENTRY LdrEntry;
-//	UNICODE_STRING normalized;
-//	NTSTATUS status;
-//
-//	if (!CfgGetStealthState())
-//		return STATUS_SUCCESS;
-//	
-//	LdrEntry = (PLDR_DATA_TABLE_ENTRY)DriverObject->DriverSection;
-//
-//	normalized.Length = 0;
-//	normalized.MaximumLength = LdrEntry->FullModuleName.Length + NORMALIZE_INCREAMENT;
-//	normalized.Buffer = (PWCH)ExAllocatePoolWithQuotaTag(PagedPool, normalized.MaximumLength, DRIVER_ALLOC_TAG);
-//	
-//	if (!normalized.Buffer)
-//	{
-//		_InfoPrint("Error, can't allocate buffer");
-//		return STATUS_MEMORY_NOT_ALLOCATED;
-//	}
-//
-//	status = NormalizeDevicePath(&LdrEntry->FullModuleName, &normalized);
-//	if (!NT_SUCCESS(status))
-//	{
-//		_InfoPrint("Error, path normalization failed with code:%08x, path:%wZ", status, &LdrEntry->FullModuleName);
-//		ExFreePoolWithTag(normalized.Buffer, DRIVER_ALLOC_TAG);
-//		return status;
-//	}
-//
-//	status = AddHiddenFile(&normalized, &g_hiddenDriverFileId);
-//	if (!NT_SUCCESS(status))
-//		_InfoPrint("Error, can't hide self registry key");
-//
-//	ExFreePoolWithTag(normalized.Buffer, DRIVER_ALLOC_TAG);
-//
-//	status = AddHiddenRegKey(RegistryPath, &g_hiddenRegConfigId);
-//	if (!NT_SUCCESS(status))
-//		_InfoPrint("Error, can't hide self registry key");
-//
-//	_InfoPrint("Stealth mode has been activated");
-//	return STATUS_SUCCESS;
-//}
+	InitializeObjectAttributes(&fileAttr, &filename, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+
+	status = ZwOpenFile(&fh, FILE_READ_DATA, &fileAttr, &fhStatus, 0, FILE_RANDOM_ACCESS);
+	if (!NT_SUCCESS(status))
+	{
+		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "Unable to read conf file: 0x%x. Reload driver\n", status);
+		return FALSE;
+	}
+
+	byteOffset.LowPart = byteOffset.HighPart = 0;
+
+	status = ZwReadFile(fh, NULL, NULL, NULL, &fhStatus, cBuf, BUFSIZE, &byteOffset, NULL);
+	if (!NT_SUCCESS(status))
+	{
+		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "Unable to read bitmap file [0x%x].\n", status);
+		ZwClose(fh);
+		return FALSE;
+	}
+	ZwClose(fh);
+
+	p = cBuf;
+	for (int i = 0; i < BUFSIZE && *p != '\n'; i++, p++);
+	p--;
+	*p = '\0';
+	p += 2;
+	mbstowcs(g_excludeRegKey, cBuf, strlen(cBuf) + 1);
+	mbstowcs(g_excludeFile, p, strlen(p) + 1);
+	
+	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "#%ws#\n", g_excludeRegKey);
+	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "#%ws#\n", g_excludeFile);
+
+	//wcscpy(g_excludeRegKey, wRegKey);
+	//wcscpy(g_excludeFile, wExeName);
+
+	return TRUE;
+}
 
 // =========================================================================================
 
@@ -83,30 +86,21 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 {
 	UNREFERENCED_PARAMETER(DriverObject);
 
-	//DestroyDevice();
 	DestroyRegistryFilter();
 	DestroyFSMiniFilter();
-	//DestroyPsMonitor();
 }
 
 _Function_class_(DRIVER_INITIALIZE)
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
-	NTSTATUS status;
-
 	UNREFERENCED_PARAMETER(RegistryPath);
+
+	NTSTATUS status;
 
 	EnableDisableDriver(TRUE);
 
-	//status = InitializeConfigs(RegistryPath);
-	//if (!NT_SUCCESS(status))
-	//	_InfoPrint("Error, can't initialize configs");
-
-	//EnableDisableDriver(CfgGetDriverState());
-
-	//status = InitializePsMonitor(DriverObject);
-	//if (!NT_SUCCESS(status))
-	//	_InfoPrint("Error, object monitor haven't started");
+	if(!readConfFile())
+		_InfoPrint("Error read conf file");
 
 	status = InitializeFSMiniFilter(DriverObject);
 	if (!NT_SUCCESS(status))
@@ -116,19 +110,8 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 	if (!NT_SUCCESS(status))
 		_InfoPrint("Error, registry filter haven't started");
 
-	//status = InitializeDevice(DriverObject);
-	//if (!NT_SUCCESS(status))
-	//	_InfoPrint("Error, can't create device");
-
-	//status = InitializeStealthMode(DriverObject, RegistryPath);
-	//if (!NT_SUCCESS(status))
-	//	_InfoPrint("Error, can't activate stealth mode");
-
-	//DestroyConfigs();
-
 	DriverObject->DriverUnload = DriverUnload;
 	g_driverObject = DriverObject;
 
 	return STATUS_SUCCESS;
 }
-
