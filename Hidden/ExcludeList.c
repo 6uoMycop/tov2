@@ -65,16 +65,6 @@ VOID DestroyExcludeListContext(ExcludeContext Context)
 	ExFreePoolWithTag(cntx, EXCLUDE_ALLOC_TAG);
 }
 
-NTSTATUS AddExcludeListFile(ExcludeContext Context, PUNICODE_STRING FilePath, PExcludeEntryId EntryId, ExcludeEntryId ParentId)
-{
-	return AddExcludeListEntry(Context, FilePath, ExcludeFile, EntryId, ParentId);
-}
-
-NTSTATUS AddExcludeListDirectory(ExcludeContext Context, PUNICODE_STRING DirPath, PExcludeEntryId EntryId, ExcludeEntryId ParentId)
-{
-	return AddExcludeListEntry(Context, DirPath, ExcludeDirectory, EntryId, ParentId);
-}
-
 NTSTATUS AddExcludeListRegistryKey(ExcludeContext Context, PUNICODE_STRING KeyPath, PExcludeEntryId EntryId, ExcludeEntryId ParentId)
 {
 	return AddExcludeListEntry(Context, KeyPath, ExcludeRegKey, EntryId, ParentId);
@@ -279,38 +269,6 @@ BOOLEAN CheckExcludeListDirectory(ExcludeContext Context, PCUNICODE_STRING Path)
 				result = TRUE;
 				break;
 			}
-		}
-
-		entry = (PEXCLUDE_FILE_LIST_ENTRY)entry->list.Flink;
-	}
-
-	ExReleaseFastMutex(&cntx->listLock);
-
-	return result;
-}
-
-BOOLEAN CheckExcludeListDirFile(ExcludeContext Context, PCUNICODE_STRING Dir, PCUNICODE_STRING File)
-{
-	PEXCLUDE_FILE_CONTEXT cntx = (PEXCLUDE_FILE_CONTEXT)Context;
-	PEXCLUDE_FILE_LIST_ENTRY entry;
-	UNICODE_STRING Directory;
-	BOOLEAN result = FALSE;
-
-	Directory = *Dir;
-
-	if (Directory.Length > 0 && Directory.Buffer[Directory.Length / sizeof(WCHAR) - 1] == L'\\')
-		Directory.Length -= sizeof(WCHAR);
-
-	ExAcquireFastMutex(&cntx->listLock);
-
-	entry = (PEXCLUDE_FILE_LIST_ENTRY)cntx->listHead.Flink;
-	while (entry != (PEXCLUDE_FILE_LIST_ENTRY)&cntx->listHead)
-	{
-		if (RtlCompareUnicodeString(&entry->path.dirName, &Directory, TRUE) == 0
-		 && RtlCompareUnicodeString(&entry->path.fileName, File, TRUE) == 0)
-		{
-			result = TRUE;
-			break;
 		}
 
 		entry = (PEXCLUDE_FILE_LIST_ENTRY)entry->list.Flink;

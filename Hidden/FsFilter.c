@@ -149,7 +149,7 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 	fullName.Buffer = ExAllocatePoolWithTag(NonPagedPool, fullName.MaximumLength, FSFILTER_ALLOC_TAG);
 	if (!fullName.Buffer)
 	{
-		_InfoPrint("Error, memory allocation failed with code:%08x\n", status);
+		_InfoPrint("Error, memory allocation failed\n");
 		return FALSE;
 	}
 
