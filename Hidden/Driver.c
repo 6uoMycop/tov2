@@ -15,6 +15,7 @@ ULONGLONG g_hiddenRegConfigId = 0;
 ULONGLONG g_hiddenDriverFileId = 0;
 extern WCHAR g_excludeFile[BUFSIZE];
 extern WCHAR g_excludeRegKey[BUFSIZE];
+extern UNICODE_STRING us_excludeFile;
 
 VOID EnableDisableDriver(BOOLEAN enabled)
 {
@@ -71,6 +72,8 @@ BOOLEAN readConfFile()
 	
 	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "#%ws#\n", g_excludeRegKey);
 	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "#%ws#\n", g_excludeFile);
+
+	RtlInitUnicodeString(&us_excludeFile, g_excludeFile);
 
 	return TRUE;
 }

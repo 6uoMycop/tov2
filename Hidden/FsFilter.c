@@ -3,7 +3,7 @@
 // =========================================================================================
 
 #include <fltKernel.h>
-#include "ExcludeList.h"
+#include <ntstrsafe.h>
 #include "FsFilter.h"
 #include "Helper.h"
 #include "Driver.h"
@@ -15,12 +15,7 @@ NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS 
 FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID *CompletionContext);
 FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID CompletionContext, FLT_POST_OPERATION_FLAGS Flags);
 
-NTSTATUS CleanFileFullDirectoryInformation(PFILE_FULL_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
-NTSTATUS CleanFileBothDirectoryInformation(PFILE_BOTH_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
-NTSTATUS CleanFileDirectoryInformation(PFILE_DIRECTORY_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
-NTSTATUS CleanFileIdFullDirectoryInformation(PFILE_ID_FULL_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
 NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
-NTSTATUS CleanFileNamesInformation(PFILE_NAMES_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
 
 const FLT_CONTEXT_REGISTRATION Contexts[] = {
 	{ FLT_CONTEXT_END }
@@ -50,12 +45,8 @@ CONST FLT_REGISTRATION FilterRegistration = {
 BOOLEAN g_fsMonitorInited = FALSE;
 PFLT_FILTER gFilterHandle = NULL;
 
-ExcludeContext g_excludeFileContext;
-
-WCHAR g_excludeFile[BUFSIZE] = {
-	0
-	//L"\\Device\\HarddiskVolume2\\Users\\Public\\Documents\\grabber1.exe"
-};
+WCHAR g_excludeFile[BUFSIZE] = { 0 };
+UNICODE_STRING us_excludeFile;
 
 NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS Flags, DEVICE_TYPE VolumeDeviceType, FLT_FILESYSTEM_TYPE VolumeFilesystemType)
 {
@@ -68,11 +59,6 @@ NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS 
 
 	return STATUS_SUCCESS;
 }
-
-//enum {
-//	FoundExcludeFile = 1,
-//	FoundExcludeDir = 2,
-//};
 
 FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID *CompletionContext)
 {
@@ -119,8 +105,6 @@ FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFL
 	if (!NT_SUCCESS(Data->IoStatus.Status))
 		return FLT_POSTOP_FINISHED_PROCESSING;
 
-	//_InfoPrint("FltDirCtrlPostOperation: %wZ", &Data->Iopb->TargetFileObject->FileName);
-
 	status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED, &fltName);
 	if (!NT_SUCCESS(status))
 	{
@@ -152,7 +136,7 @@ FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFL
 NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName)
 {
 	PFILE_ID_BOTH_DIR_INFORMATION nextInfo, prevInfo = NULL;
-	UNICODE_STRING fileName;
+	UNICODE_STRING fileName, fullName;
 	UINT32 offset, moveLength;
 	BOOLEAN matched = FALSE, search;
 	NTSTATUS status = STATUS_SUCCESS;
@@ -160,6 +144,14 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 	offset = 0;
 	search = TRUE;
 
+	fullName.Length = 0;
+	fullName.MaximumLength = NTSTRSAFE_UNICODE_STRING_MAX_CCH * sizeof(WCHAR);
+	fullName.Buffer = ExAllocatePoolWithTag(NonPagedPool, fullName.MaximumLength, FSFILTER_ALLOC_TAG);
+	if (!fullName.Buffer)
+	{
+		_InfoPrint("Error, memory allocation failed with code:%08x\n", status);
+		return FALSE;
+	}
 
 	do
 	{
@@ -167,12 +159,18 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 		fileName.Length = (USHORT)info->FileNameLength;
 		fileName.MaximumLength = (USHORT)info->FileNameLength;
 
+		RtlUnicodeStringCopy(&fullName, &fltName->Name);
+		RtlAppendUnicodeToString(&fullName, L"\\");
+		RtlUnicodeStringCat(&fullName, &fileName);
+
 		if (!(info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			matched = CheckExcludeListDirFile(g_excludeFileContext, &fltName->Name, &fileName);
+		{
+			matched = (RtlCompareUnicodeString(&fullName, &us_excludeFile, TRUE) == 0) ? TRUE : FALSE;
+			_InfoPrint("%ws: %wZ", matched ? L"TRUE" : L"FALSE", &fullName);
+		}
 
 		if (matched)
 		{
-			_InfoPrint("CleanFileIdBothDirectoryInformation: %wZ#%wZ\n", fltName->Name, fileName);
 			BOOLEAN retn = FALSE;
 
 			if (prevInfo != NULL)
@@ -213,10 +211,11 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 				}
 			}
 
-			_InfoPrint("Removed from query: %wZ\\\\%wZ\n", &fltName->Name, &fileName);
-
 			if (retn)
+			{
+				ExFreePoolWithTag(fullName.Buffer, FSFILTER_ALLOC_TAG);
 				return status;
+			}
 
 			info = (PFILE_ID_BOTH_DIR_INFORMATION)((PCHAR)info + offset);
 			continue;
@@ -230,25 +229,13 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 			search = FALSE;
 	} while (search);
 
+	ExFreePoolWithTag(fullName.Buffer, FSFILTER_ALLOC_TAG);
 	return status;
 }
 
 NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
-	UNICODE_STRING str;
-	ExcludeEntryId id;
-
-	// Initialize and fill exclude file\dir lists
-	status = InitializeExcludeListContext(&g_excludeFileContext, ExcludeFile);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Exclude file list initialization failed with code:%08x", status);
-		return status;
-	}
-
-	RtlInitUnicodeString(&str, g_excludeFile);
-	AddExcludeListFile(g_excludeFileContext, &str, &id, 0);
 
 	// Filesystem mini-filter initialization
 
@@ -268,10 +255,7 @@ NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 	}
 
 	if (!NT_SUCCESS(status))
-	{
-		DestroyExcludeListContext(g_excludeFileContext);
 		return status;
-	}
 
 	g_fsMonitorInited = TRUE;
 
@@ -287,9 +271,8 @@ NTSTATUS DestroyFSMiniFilter()
 	FltUnregisterFilter(gFilterHandle);
 	gFilterHandle = NULL;
 
-	DestroyExcludeListContext(g_excludeFileContext);
 	g_fsMonitorInited = FALSE;
 
-	_InfoPrint("Deitialization is completed");
+	_InfoPrint("Deinitialization is completed (Fs)");
 	return STATUS_SUCCESS;
 }
