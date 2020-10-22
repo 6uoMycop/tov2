@@ -7,7 +7,7 @@
 //#include "PsMonitor.h"
 //#include "Device.h"
 #include "Driver.h"
-#include "Configs.h"
+//#include "Configs.h"
 #include "Helper.h"
 
 #define DRIVER_ALLOC_TAG 'nddH'
@@ -94,15 +94,15 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
 	NTSTATUS status;
 
-	//UNREFERENCED_PARAMETER(RegistryPath);
+	UNREFERENCED_PARAMETER(RegistryPath);
 
 	EnableDisableDriver(TRUE);
 
-	status = InitializeConfigs(RegistryPath);
-	if (!NT_SUCCESS(status))
-		_InfoPrint("Error, can't initialize configs");
+	//status = InitializeConfigs(RegistryPath);
+	//if (!NT_SUCCESS(status))
+	//	_InfoPrint("Error, can't initialize configs");
 
-	EnableDisableDriver(CfgGetDriverState());
+	//EnableDisableDriver(CfgGetDriverState());
 
 	//status = InitializePsMonitor(DriverObject);
 	//if (!NT_SUCCESS(status))
@@ -124,7 +124,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 	//if (!NT_SUCCESS(status))
 	//	_InfoPrint("Error, can't activate stealth mode");
 
-	DestroyConfigs();
+	//DestroyConfigs();
 
 	DriverObject->DriverUnload = DriverUnload;
 	g_driverObject = DriverObject;

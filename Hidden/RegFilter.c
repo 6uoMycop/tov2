@@ -5,7 +5,7 @@
 #include "RegFilter.h"
 #include "ExcludeList.h"
 //#include "PsMonitor.h"
-#include "Configs.h"
+//#include "Configs.h"
 #include "Driver.h"
 #include "Helper.h"
 #include <Ntstrsafe.h>
@@ -20,7 +20,7 @@ ExcludeContext g_excludeRegKeyContext;
 // Use this variable for hard code path to registry keys that you would like to hide
 // For instance: L"\\REGISTRY\\MACHINE\\SOFTWARE\\test_key",
 // Notice: this array should be NULL terminated
-WCHAR g_excludeRegKeys[1][256] = {
+WCHAR g_excludeRegKey[256] = {
 	L"\\REGISTRY\\MACHINE\\SOFTWARE\\test1"
 };
 
@@ -670,11 +670,11 @@ NTSTATUS InitializeRegistryFilter(PDRIVER_OBJECT DriverObject)
 
 	//for (i = 0; g_excludeRegKeys[i]; i++)
 	//{
-		RtlInitUnicodeString(&str, g_excludeRegKeys[0]);
+		RtlInitUnicodeString(&str, g_excludeRegKey);
 		AddHiddenRegKey(&str, &id);
 	//}
 
-	CfgEnumConfigsTable(HideRegKeysTable, &LoadConfigRegKeysCallback, NULL);
+	//CfgEnumConfigsTable(HideRegKeysTable, &LoadConfigRegKeysCallback, NULL);
 
 	//status = InitializeExcludeListContext(&g_excludeRegValueContext, ExcludeRegValue);
 	//if (!NT_SUCCESS(status))

