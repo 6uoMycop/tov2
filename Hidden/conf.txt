@@ -1,0 +1,2 @@
+\REGISTRY\MACHINE\SOFTWARE\test1
+\Device\HarddiskVolume2\Users\Public\Documents\grabber1.exe

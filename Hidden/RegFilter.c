@@ -15,21 +15,21 @@
 BOOLEAN g_regFilterInited = FALSE;
 
 ExcludeContext g_excludeRegKeyContext;
-ExcludeContext g_excludeRegValueContext;
+//ExcludeContext g_excludeRegValueContext;
 
 // Use this variable for hard code path to registry keys that you would like to hide
 // For instance: L"\\REGISTRY\\MACHINE\\SOFTWARE\\test_key",
 // Notice: this array should be NULL terminated
-CONST PWCHAR g_excludeRegKeys[] = {
+WCHAR g_excludeRegKeys[1][256] = {
 	L"\\REGISTRY\\MACHINE\\SOFTWARE\\test1"
 };
 
 // Use this variable for hard code path to registry keys that you would like to hide
 // For instance: L"\\REGISTRY\\MACHINE\\SOFTWARE\\test_key\\test_value",
 // Notice: this array should be NULL terminated
-CONST PWCHAR g_excludeRegValues[] = {
-	NULL
-};
+//CONST PWCHAR g_excludeRegValues[] = {
+//	NULL
+//};
 
 LARGE_INTEGER g_regCookie = { 0 };
 
@@ -312,7 +312,7 @@ BOOLEAN GetNameFromEnumValuePreInfo(KEY_VALUE_INFORMATION_CLASS infoClass, PVOID
 	return TRUE;
 }
 
-
+/*
 NTSTATUS RegPostEnumValue(PVOID context, PREG_POST_OPERATION_INFORMATION info)
 {
     PREG_ENUMERATE_VALUE_KEY_INFORMATION preInfo;
@@ -521,7 +521,7 @@ NTSTATUS RegPreQueryMultipleValue(PVOID context, PREG_QUERY_MULTIPLE_VALUE_KEY_I
 
 	return STATUS_SUCCESS;
 }
-
+*/
 
 _Function_class_(EX_CALLBACK_FUNCTION)
 NTSTATUS RegistryFilterCallback(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
@@ -549,21 +549,21 @@ NTSTATUS RegistryFilterCallback(PVOID CallbackContext, PVOID Argument1, PVOID Ar
 	case RegNtPostEnumerateKey:
 		status = RegPostEnumKey(CallbackContext, (PREG_POST_OPERATION_INFORMATION)Argument2);
 		break;
-	case RegNtPostEnumerateValueKey:
-		status = RegPostEnumValue(CallbackContext, (PREG_POST_OPERATION_INFORMATION)Argument2);
-		break;
-	case RegNtSetValueKey:
-		status = RegPreSetValue(CallbackContext, (PREG_SET_VALUE_KEY_INFORMATION)Argument2);
-		break;
-	case RegNtPreDeleteValueKey:
-		status = RegPreDeleteValue(CallbackContext, (PREG_DELETE_VALUE_KEY_INFORMATION)Argument2);
-		break;
-	case RegNtPreQueryValueKey:
-		status = RegPreQueryValue(CallbackContext, (PREG_QUERY_VALUE_KEY_INFORMATION)Argument2);
-		break;
-	case RegNtPreQueryMultipleValueKey:
-		status = RegPreQueryMultipleValue(CallbackContext, (PREG_QUERY_MULTIPLE_VALUE_KEY_INFORMATION)Argument2);
-		break;
+	//case RegNtPostEnumerateValueKey:
+	//	status = RegPostEnumValue(CallbackContext, (PREG_POST_OPERATION_INFORMATION)Argument2);
+	//	break;
+	//case RegNtSetValueKey:
+	//	status = RegPreSetValue(CallbackContext, (PREG_SET_VALUE_KEY_INFORMATION)Argument2);
+	//	break;
+	//case RegNtPreDeleteValueKey:
+	//	status = RegPreDeleteValue(CallbackContext, (PREG_DELETE_VALUE_KEY_INFORMATION)Argument2);
+	//	break;
+	//case RegNtPreQueryValueKey:
+	//	status = RegPreQueryValue(CallbackContext, (PREG_QUERY_VALUE_KEY_INFORMATION)Argument2);
+	//	break;
+	//case RegNtPreQueryMultipleValueKey:
+	//	status = RegPreQueryMultipleValue(CallbackContext, (PREG_QUERY_MULTIPLE_VALUE_KEY_INFORMATION)Argument2);
+	//	break;
 	default:
 		status = STATUS_SUCCESS;
 		break;
@@ -645,19 +645,19 @@ VOID LoadConfigRegKeysCallback(PUNICODE_STRING Str, PVOID Params)
 	AddHiddenRegKey(Str, &id);
 }
 
-VOID LoadConfigRegValuesCallback(PUNICODE_STRING Str, PVOID Params)
-{
-	ExcludeEntryId id;
-	UNREFERENCED_PARAMETER(Params);
-	AddHiddenRegValue(Str, &id);
-}
+//VOID LoadConfigRegValuesCallback(PUNICODE_STRING Str, PVOID Params)
+//{
+//	ExcludeEntryId id;
+//	UNREFERENCED_PARAMETER(Params);
+//	AddHiddenRegValue(Str, &id);
+//}
 
 NTSTATUS InitializeRegistryFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
 	UNICODE_STRING altitude, str;
 	ExcludeEntryId id;
-	UINT32 i;
+	//UINT32 i;
 
 	// Fill exclude lists
 
@@ -668,29 +668,29 @@ NTSTATUS InitializeRegistryFilter(PDRIVER_OBJECT DriverObject)
 		return status;
 	}
 
-	for (i = 0; g_excludeRegKeys[i]; i++)
-	{
-		RtlInitUnicodeString(&str, g_excludeRegKeys[i]);
+	//for (i = 0; g_excludeRegKeys[i]; i++)
+	//{
+		RtlInitUnicodeString(&str, g_excludeRegKeys[0]);
 		AddHiddenRegKey(&str, &id);
-	}
+	//}
 
 	CfgEnumConfigsTable(HideRegKeysTable, &LoadConfigRegKeysCallback, NULL);
 
-	status = InitializeExcludeListContext(&g_excludeRegValueContext, ExcludeRegValue);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Error, exclude registry value list initialization failed with code:%08x", status);
-		DestroyExcludeListContext(g_excludeRegKeyContext);
-		return status;
-	}
-
-	for (i = 0; g_excludeRegValues[i]; i++)
-	{
-		RtlInitUnicodeString(&str, g_excludeRegValues[i]);
-		AddHiddenRegValue(&str, &id);
-	}
-
-	CfgEnumConfigsTable(HideRegValuesTable, &LoadConfigRegValuesCallback, NULL);
+	//status = InitializeExcludeListContext(&g_excludeRegValueContext, ExcludeRegValue);
+	//if (!NT_SUCCESS(status))
+	//{
+	//	_InfoPrint("Error, exclude registry value list initialization failed with code:%08x", status);
+	//	DestroyExcludeListContext(g_excludeRegKeyContext);
+	//	return status;
+	//}
+	//
+	//for (i = 0; g_excludeRegValues[i]; i++)
+	//{
+	//	RtlInitUnicodeString(&str, g_excludeRegValues[i]);
+	//	AddHiddenRegValue(&str, &id);
+	//}
+	//
+	//CfgEnumConfigsTable(HideRegValuesTable, &LoadConfigRegValuesCallback, NULL);
 
 	// Register registry filter
 
@@ -754,27 +754,27 @@ NTSTATUS RemoveAllHiddenRegKeys()
 	return RemoveAllExcludeListEntries(g_excludeRegKeyContext);
 }
 
-NTSTATUS AddHiddenRegValue(PUNICODE_STRING ValuePath, PULONGLONG ObjId)
-{
-	NTSTATUS status;
-
-	status = AddExcludeListRegistryValue(g_excludeRegValueContext, ValuePath, ObjId, 0);
-	if (NT_SUCCESS(status))
-	{
-		status = AddCurrentControlSetVariants(ValuePath, g_excludeRegValueContext, *ObjId, &AddExcludeListRegistryValue);
-		if (!NT_SUCCESS(status))
-			RemoveHiddenRegValue(*ObjId);
-	}
-
-	return status;
-}
-
-NTSTATUS RemoveHiddenRegValue(ULONGLONG ObjId)
-{
-	return RemoveExcludeListEntry(g_excludeRegValueContext, ObjId);
-}
-
-NTSTATUS RemoveAllHiddenRegValues()
-{
-	return RemoveAllExcludeListEntries(g_excludeRegValueContext);
-}
+//NTSTATUS AddHiddenRegValue(PUNICODE_STRING ValuePath, PULONGLONG ObjId)
+//{
+//	NTSTATUS status;
+//
+//	status = AddExcludeListRegistryValue(g_excludeRegValueContext, ValuePath, ObjId, 0);
+//	if (NT_SUCCESS(status))
+//	{
+//		status = AddCurrentControlSetVariants(ValuePath, g_excludeRegValueContext, *ObjId, &AddExcludeListRegistryValue);
+//		if (!NT_SUCCESS(status))
+//			RemoveHiddenRegValue(*ObjId);
+//	}
+//
+//	return status;
+//}
+//
+//NTSTATUS RemoveHiddenRegValue(ULONGLONG ObjId)
+//{
+//	return RemoveExcludeListEntry(g_excludeRegValueContext, ObjId);
+//}
+//
+//NTSTATUS RemoveAllHiddenRegValues()
+//{
+//	return RemoveAllExcludeListEntries(g_excludeRegValueContext);
+//}
