@@ -12,7 +12,6 @@
 
 NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS Flags, DEVICE_TYPE VolumeDeviceType, FLT_FILESYSTEM_TYPE VolumeFilesystemType);
 
-FLT_PREOP_CALLBACK_STATUS FltCreatePreOperation(_Inout_ PFLT_CALLBACK_DATA Data, _In_ PCFLT_RELATED_OBJECTS FltObjects, _Flt_CompletionContext_Outptr_ PVOID *CompletionContext);
 FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID *CompletionContext);
 FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID CompletionContext, FLT_POST_OPERATION_FLAGS Flags);
 
@@ -23,13 +22,11 @@ NTSTATUS CleanFileIdFullDirectoryInformation(PFILE_ID_FULL_DIR_INFORMATION info,
 NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
 NTSTATUS CleanFileNamesInformation(PFILE_NAMES_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName);
 
-
 const FLT_CONTEXT_REGISTRATION Contexts[] = {
 	{ FLT_CONTEXT_END }
 };
 
 CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
-	{ IRP_MJ_CREATE, 0, FltCreatePreOperation, NULL },
 	{ IRP_MJ_DIRECTORY_CONTROL, 0, FltDirCtrlPreOperation, FltDirCtrlPostOperation },
 	{ IRP_MJ_OPERATION_END }
 };
@@ -72,57 +69,10 @@ NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS 
 	return STATUS_SUCCESS;
 }
 
-enum {
-	FoundExcludeFile = 1,
-	FoundExcludeDir = 2,
-};
-
-FLT_PREOP_CALLBACK_STATUS FltCreatePreOperation(
-	_Inout_ PFLT_CALLBACK_DATA Data,
-	_In_ PCFLT_RELATED_OBJECTS FltObjects,
-	_Flt_CompletionContext_Outptr_ PVOID *CompletionContext)
-{
-	UINT32 options;
-	PFLT_FILE_NAME_INFORMATION fltName;
-	NTSTATUS status;
-	BOOLEAN neededPrevent = FALSE;
-
-	UNREFERENCED_PARAMETER(FltObjects);
-	UNREFERENCED_PARAMETER(CompletionContext);
-
-	if (!IsDriverEnabled())
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-	options = Data->Iopb->Parameters.Create.Options & FILE_DIRECTORY_FILE;
-
-	status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED, &fltName);
-	if (!NT_SUCCESS(status))
-	{
-		if (status != STATUS_OBJECT_PATH_NOT_FOUND)
-			_InfoPrint("FltGetFileNameInformation() failed with code:%08x", status);
-
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-	}
-
-	if (!options)
-	{
-		_InfoPrint("File: %wZ", fltName->Name);
-		// If it is create file event
-		if (CheckExcludeListDirectory(g_excludeFileContext, &fltName->Name))
-			neededPrevent = TRUE;
-	}
-
-	FltReleaseFileNameInformation(fltName);
-
-	if (neededPrevent)
-	{
-		_InfoPrint("Operation has been cancelled for: %wZ", &Data->Iopb->TargetFileObject->FileName);
-		Data->IoStatus.Status = STATUS_NO_SUCH_FILE;
-		return FLT_PREOP_COMPLETE;
-	}
-
-	return FLT_PREOP_SUCCESS_NO_CALLBACK;
-}
+//enum {
+//	FoundExcludeFile = 1,
+//	FoundExcludeDir = 2,
+//};
 
 FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID *CompletionContext)
 {
@@ -132,7 +82,7 @@ FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_
 	if (!IsDriverEnabled())
 		return FLT_POSTOP_FINISHED_PROCESSING;
 
-	_InfoPrint("FltDirCtrlPreOperation: %wZ", &Data->Iopb->TargetFileObject->FileName);
+	//_InfoPrint("FltDirCtrlPreOperation: %wZ", &Data->Iopb->TargetFileObject->FileName);
 
 	if (Data->Iopb->MinorFunction != IRP_MN_QUERY_DIRECTORY)
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -169,7 +119,7 @@ FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFL
 	if (!NT_SUCCESS(Data->IoStatus.Status))
 		return FLT_POSTOP_FINISHED_PROCESSING;
 
-	_InfoPrint("FltDirCtrlPostOperation: %wZ", &Data->Iopb->TargetFileObject->FileName);
+	//_InfoPrint("FltDirCtrlPostOperation: %wZ", &Data->Iopb->TargetFileObject->FileName);
 
 	status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED, &fltName);
 	if (!NT_SUCCESS(status))
@@ -184,23 +134,8 @@ FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFL
 
 		switch (params->DirectoryControl.QueryDirectory.FileInformationClass)
 		{
-		case FileFullDirectoryInformation:
-			status = CleanFileFullDirectoryInformation((PFILE_FULL_DIR_INFORMATION)params->DirectoryControl.QueryDirectory.DirectoryBuffer, fltName);
-			break;
-		case FileBothDirectoryInformation:
-			status = CleanFileBothDirectoryInformation((PFILE_BOTH_DIR_INFORMATION)params->DirectoryControl.QueryDirectory.DirectoryBuffer, fltName);
-			break;
-		case FileDirectoryInformation:
-			status = CleanFileDirectoryInformation((PFILE_DIRECTORY_INFORMATION)params->DirectoryControl.QueryDirectory.DirectoryBuffer, fltName);
-			break;
-		case FileIdFullDirectoryInformation:
-			status = CleanFileIdFullDirectoryInformation((PFILE_ID_FULL_DIR_INFORMATION)params->DirectoryControl.QueryDirectory.DirectoryBuffer, fltName);
-			break;
 		case FileIdBothDirectoryInformation:
 			status = CleanFileIdBothDirectoryInformation((PFILE_ID_BOTH_DIR_INFORMATION)params->DirectoryControl.QueryDirectory.DirectoryBuffer, fltName);
-			break;
-		case FileNamesInformation:
-			status = CleanFileNamesInformation((PFILE_NAMES_INFORMATION)params->DirectoryControl.QueryDirectory.DirectoryBuffer, fltName);
 			break;
 		}
 
@@ -214,334 +149,6 @@ FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFL
 	return FLT_POSTOP_FINISHED_PROCESSING;
 }
 
-NTSTATUS CleanFileFullDirectoryInformation(PFILE_FULL_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName)
-{
-	PFILE_FULL_DIR_INFORMATION nextInfo, prevInfo = NULL;
-	UNICODE_STRING fileName;
-	UINT32 offset, moveLength;
-	BOOLEAN matched = FALSE, search;
-	NTSTATUS status = STATUS_SUCCESS;
-
-	offset = 0;
-	search = TRUE;
-
-	do
-	{
-		fileName.Buffer = info->FileName;
-		fileName.Length = (USHORT)info->FileNameLength;
-		fileName.MaximumLength = (USHORT)info->FileNameLength;
-
-		if (!(info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			matched = CheckExcludeListDirFile(g_excludeFileContext, &fltName->Name, &fileName);
-
-		if (matched)
-		{
-			BOOLEAN retn = FALSE;
-
-			if (prevInfo != NULL)
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					prevInfo->NextEntryOffset += info->NextEntryOffset;
-					offset = info->NextEntryOffset;
-				}
-				else
-				{
-					prevInfo->NextEntryOffset = 0;
-					status = STATUS_SUCCESS;
-					retn = TRUE;
-				}
-
-				RtlFillMemory(info, sizeof(FILE_FULL_DIR_INFORMATION), 0);
-			}
-			else
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					nextInfo = (PFILE_FULL_DIR_INFORMATION)((PUCHAR)info + info->NextEntryOffset);
-					moveLength = 0;
-					while (nextInfo->NextEntryOffset != 0)
-					{
-						moveLength += nextInfo->NextEntryOffset;
-						nextInfo = (PFILE_FULL_DIR_INFORMATION)((PUCHAR)nextInfo + nextInfo->NextEntryOffset);
-					}
-
-					moveLength += FIELD_OFFSET(FILE_FULL_DIR_INFORMATION, FileName) + nextInfo->FileNameLength;
-					RtlMoveMemory(info, (PUCHAR)info + info->NextEntryOffset, moveLength);//continue
-				}
-				else
-				{
-					status = STATUS_NO_MORE_ENTRIES;
-					retn = TRUE;
-				}
-			}
-
-			_InfoPrint("Removed from query: %wZ\\%wZ", &fltName->Name, &fileName);
-
-			if (retn)
-				return status;
-
-			info = (PFILE_FULL_DIR_INFORMATION)((PCHAR)info + offset);
-			continue;
-		}
-
-		offset = info->NextEntryOffset;
-		prevInfo = info;
-		info = (PFILE_FULL_DIR_INFORMATION)((PCHAR)info + offset);
-
-		if (offset == 0)
-			search = FALSE;
-	} while (search);
-
-	return STATUS_SUCCESS;
-}
-
-NTSTATUS CleanFileBothDirectoryInformation(PFILE_BOTH_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName)
-{
-	PFILE_BOTH_DIR_INFORMATION nextInfo, prevInfo = NULL;
-	UNICODE_STRING fileName;
-	UINT32 offset, moveLength;
-	BOOLEAN matched = FALSE, search;
-	NTSTATUS status = STATUS_SUCCESS;
-
-	offset = 0;
-	search = TRUE;
-
-	do
-	{
-		fileName.Buffer = info->FileName;
-		fileName.Length = (USHORT)info->FileNameLength;
-		fileName.MaximumLength = (USHORT)info->FileNameLength;
-
-		if (!(info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			matched = CheckExcludeListDirFile(g_excludeFileContext, &fltName->Name, &fileName);
-
-		if (matched)
-		{
-			BOOLEAN retn = FALSE;
-
-			if (prevInfo != NULL)
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					prevInfo->NextEntryOffset += info->NextEntryOffset;
-					offset = info->NextEntryOffset;
-				}
-				else
-				{
-					prevInfo->NextEntryOffset = 0;
-					status = STATUS_SUCCESS;
-					retn = TRUE;
-				}
-
-				RtlFillMemory(info, sizeof(FILE_BOTH_DIR_INFORMATION), 0);
-			}
-			else
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					nextInfo = (PFILE_BOTH_DIR_INFORMATION)((PUCHAR)info + info->NextEntryOffset);
-					moveLength = 0;
-					while (nextInfo->NextEntryOffset != 0)
-					{
-						moveLength += nextInfo->NextEntryOffset;
-						nextInfo = (PFILE_BOTH_DIR_INFORMATION)((PUCHAR)nextInfo + nextInfo->NextEntryOffset);
-					}
-
-					moveLength += FIELD_OFFSET(FILE_BOTH_DIR_INFORMATION, FileName) + nextInfo->FileNameLength;
-					RtlMoveMemory(info, (PUCHAR)info + info->NextEntryOffset, moveLength);//continue
-				}
-				else
-				{
-					status = STATUS_NO_MORE_ENTRIES;
-					retn = TRUE;
-				}
-			}
-
-			_InfoPrint("Removed from query: %wZ\\%wZ", &fltName->Name, &fileName);
-
-			if (retn)
-				return status;
-
-			info = (PFILE_BOTH_DIR_INFORMATION)((PCHAR)info + offset);
-			continue;
-		}
-
-		offset = info->NextEntryOffset;
-		prevInfo = info;
-		info = (PFILE_BOTH_DIR_INFORMATION)((PCHAR)info + offset);
-
-		if (offset == 0)
-			search = FALSE;
-	} while (search);
-
-	return STATUS_SUCCESS;
-}
-
-NTSTATUS CleanFileDirectoryInformation(PFILE_DIRECTORY_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName)
-{
-	PFILE_DIRECTORY_INFORMATION nextInfo, prevInfo = NULL;
-	UNICODE_STRING fileName;
-	UINT32 offset, moveLength;
-	BOOLEAN matched = FALSE, search;
-	NTSTATUS status = STATUS_SUCCESS;
-
-	offset = 0;
-	search = TRUE;
-
-	do
-	{
-		fileName.Buffer = info->FileName;
-		fileName.Length = (USHORT)info->FileNameLength;
-		fileName.MaximumLength = (USHORT)info->FileNameLength;
-
-		if (!(info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			matched = CheckExcludeListDirFile(g_excludeFileContext, &fltName->Name, &fileName);
-
-		if (matched)
-		{
-			BOOLEAN retn = FALSE;
-
-			if (prevInfo != NULL)
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					prevInfo->NextEntryOffset += info->NextEntryOffset;
-					offset = info->NextEntryOffset;
-				}
-				else
-				{
-					prevInfo->NextEntryOffset = 0;
-					status = STATUS_SUCCESS;
-					retn = TRUE;
-				}
-
-				RtlFillMemory(info, sizeof(FILE_DIRECTORY_INFORMATION), 0);
-			}
-			else
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					nextInfo = (PFILE_DIRECTORY_INFORMATION)((PUCHAR)info + info->NextEntryOffset);
-					moveLength = 0;
-					while (nextInfo->NextEntryOffset != 0)
-					{
-						moveLength += nextInfo->NextEntryOffset;
-						nextInfo = (PFILE_DIRECTORY_INFORMATION)((PUCHAR)nextInfo + nextInfo->NextEntryOffset);
-					}
-
-					moveLength += FIELD_OFFSET(FILE_DIRECTORY_INFORMATION, FileName) + nextInfo->FileNameLength;
-					RtlMoveMemory(info, (PUCHAR)info + info->NextEntryOffset, moveLength);//continue
-				}
-				else
-				{
-					status = STATUS_NO_MORE_ENTRIES;
-					retn = TRUE;
-				}
-			}
-
-			_InfoPrint("Removed from query: %wZ\\%wZ", &fltName->Name, &fileName);
-
-			if (retn)
-				return status;
-
-			info = (PFILE_DIRECTORY_INFORMATION)((PCHAR)info + offset);
-			continue;
-		}
-
-		offset = info->NextEntryOffset;
-		prevInfo = info;
-		info = (PFILE_DIRECTORY_INFORMATION)((PCHAR)info + offset);
-
-		if (offset == 0)
-			search = FALSE;
-	} while (search);
-
-	return STATUS_SUCCESS;
-}
-
-NTSTATUS CleanFileIdFullDirectoryInformation(PFILE_ID_FULL_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName)
-{
-	PFILE_ID_FULL_DIR_INFORMATION nextInfo, prevInfo = NULL;
-	UNICODE_STRING fileName;
-	UINT32 offset, moveLength;
-	BOOLEAN matched = FALSE, search;
-	NTSTATUS status = STATUS_SUCCESS;
-
-	offset = 0;
-	search = TRUE;
-
-	do
-	{
-		fileName.Buffer = info->FileName;
-		fileName.Length = (USHORT)info->FileNameLength;
-		fileName.MaximumLength = (USHORT)info->FileNameLength;
-
-		if (!(info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			matched = CheckExcludeListDirFile(g_excludeFileContext, &fltName->Name, &fileName);
-
-		if (matched)
-		{
-			BOOLEAN retn = FALSE;
-
-			if (prevInfo != NULL)
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					prevInfo->NextEntryOffset += info->NextEntryOffset;
-					offset = info->NextEntryOffset;
-				}
-				else
-				{
-					prevInfo->NextEntryOffset = 0;
-					status = STATUS_SUCCESS;
-					retn = TRUE;
-				}
-
-				RtlFillMemory(info, sizeof(FILE_ID_FULL_DIR_INFORMATION), 0);
-			}
-			else
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					nextInfo = (PFILE_ID_FULL_DIR_INFORMATION)((PUCHAR)info + info->NextEntryOffset);
-					moveLength = 0;
-					while (nextInfo->NextEntryOffset != 0)
-					{
-						moveLength += nextInfo->NextEntryOffset;
-						nextInfo = (PFILE_ID_FULL_DIR_INFORMATION)((PUCHAR)nextInfo + nextInfo->NextEntryOffset);
-					}
-
-					moveLength += FIELD_OFFSET(FILE_ID_FULL_DIR_INFORMATION, FileName) + nextInfo->FileNameLength;
-					RtlMoveMemory(info, (PUCHAR)info + info->NextEntryOffset, moveLength);//continue
-				}
-				else
-				{
-					status = STATUS_NO_MORE_ENTRIES;
-					retn = TRUE;
-				}
-			}
-
-			_InfoPrint("Removed from query: %wZ\\%wZ", &fltName->Name, &fileName);
-
-			if (retn)
-				return status;
-
-			info = (PFILE_ID_FULL_DIR_INFORMATION)((PCHAR)info + offset);
-			continue;
-		}
-
-		offset = info->NextEntryOffset;
-		prevInfo = info;
-		info = (PFILE_ID_FULL_DIR_INFORMATION)((PCHAR)info + offset);
-
-		if (offset == 0)
-			search = FALSE;
-	} while (search);
-
-	return STATUS_SUCCESS;
-}
-
 NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName)
 {
 	PFILE_ID_BOTH_DIR_INFORMATION nextInfo, prevInfo = NULL;
@@ -553,6 +160,7 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 	offset = 0;
 	search = TRUE;
 
+
 	do
 	{
 		fileName.Buffer = info->FileName;
@@ -564,6 +172,7 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 
 		if (matched)
 		{
+			_InfoPrint("CleanFileIdBothDirectoryInformation: %wZ#%wZ\n", fltName->Name, fileName);
 			BOOLEAN retn = FALSE;
 
 			if (prevInfo != NULL)
@@ -604,7 +213,7 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 				}
 			}
 
-			_InfoPrint("Removed from query: %wZ\\%wZ", &fltName->Name, &fileName);
+			_InfoPrint("Removed from query: %wZ\\\\%wZ\n", &fltName->Name, &fileName);
 
 			if (retn)
 				return status;
@@ -622,85 +231,6 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 	} while (search);
 
 	return status;
-}
-
-NTSTATUS CleanFileNamesInformation(PFILE_NAMES_INFORMATION info, PFLT_FILE_NAME_INFORMATION fltName)
-{
-	PFILE_NAMES_INFORMATION nextInfo, prevInfo = NULL;
-	UNICODE_STRING fileName;
-	UINT32 offset, moveLength;
-	BOOLEAN search;
-	NTSTATUS status = STATUS_SUCCESS;
-
-	offset = 0;
-	search = TRUE;
-
-	do
-	{
-		fileName.Buffer = info->FileName;
-		fileName.Length = (USHORT)info->FileNameLength;
-		fileName.MaximumLength = (USHORT)info->FileNameLength;
-
-		if (CheckExcludeListDirFile(g_excludeFileContext, &fltName->Name, &fileName))
-		{
-			BOOLEAN retn = FALSE;
-
-			if (prevInfo != NULL)
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					prevInfo->NextEntryOffset += info->NextEntryOffset;
-					offset = info->NextEntryOffset;
-				}
-				else
-				{
-					prevInfo->NextEntryOffset = 0;
-					status = STATUS_SUCCESS;
-					retn = TRUE;
-				}
-
-				RtlFillMemory(info, sizeof(FILE_NAMES_INFORMATION), 0);
-			}
-			else
-			{
-				if (info->NextEntryOffset != 0)
-				{
-					nextInfo = (PFILE_NAMES_INFORMATION)((PUCHAR)info + info->NextEntryOffset);
-					moveLength = 0;
-					while (nextInfo->NextEntryOffset != 0)
-					{
-						moveLength += nextInfo->NextEntryOffset;
-						nextInfo = (PFILE_NAMES_INFORMATION)((PUCHAR)nextInfo + nextInfo->NextEntryOffset);
-					}
-
-					moveLength += FIELD_OFFSET(FILE_NAMES_INFORMATION, FileName) + nextInfo->FileNameLength;
-					RtlMoveMemory(info, (PUCHAR)info + info->NextEntryOffset, moveLength);//continue
-				}
-				else
-				{
-					status = STATUS_NO_MORE_ENTRIES;
-					retn = TRUE;
-				}
-			}
-
-			_InfoPrint("Removed from query: %wZ\\%wZ", &fltName->Name, &fileName);
-
-			if (retn)
-				return status;
-
-			info = (PFILE_NAMES_INFORMATION)((PCHAR)info + offset);
-			continue;
-		}
-
-		offset = info->NextEntryOffset;
-		prevInfo = info;
-		info = (PFILE_NAMES_INFORMATION)((PCHAR)info + offset);
-
-		if (offset == 0)
-			search = FALSE;
-	} while (search);
-
-	return STATUS_SUCCESS;
 }
 
 NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)

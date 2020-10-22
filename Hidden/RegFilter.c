@@ -380,13 +380,6 @@ NTSTATUS AddCurrentControlSetVariants(PUNICODE_STRING KeyPath, ExcludeContext Co
 	return STATUS_SUCCESS;
 }
 
-//VOID LoadConfigRegKeysCallback(PUNICODE_STRING Str, PVOID Params)
-//{
-//	ExcludeEntryId id;
-//	UNREFERENCED_PARAMETER(Params);
-//	AddHiddenRegKey(Str, &id);
-//}
-
 NTSTATUS InitializeRegistryFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
@@ -452,15 +445,3 @@ NTSTATUS AddHiddenRegKey(PUNICODE_STRING KeyPath, PULONGLONG ObjId)
 
 	return status;
 }
-
-/*
-NTSTATUS RemoveHiddenRegKey(ULONGLONG ObjId)
-{
-	return RemoveExcludeListEntry(g_excludeRegKeyContext, ObjId);
-}
-
-NTSTATUS RemoveAllHiddenRegKeys()
-{
-	return RemoveAllExcludeListEntries(g_excludeRegKeyContext);
-}
-*/
