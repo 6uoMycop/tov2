@@ -38,7 +38,6 @@ BOOLEAN readConfFile()
 	NTSTATUS status;
 	LARGE_INTEGER byteOffset;
 	char cBuf[BUFSIZE] = { 0 }, *p = NULL;
-	//WCHAR wRegKey[BUFSIZE] = { 0 }, wExeName[BUFSIZE] = { 0 };
 
 	RtlInitUnicodeString(&filename, L"\\Device\\HarddiskVolume2\\conf.txt");
 
@@ -73,13 +72,8 @@ BOOLEAN readConfFile()
 	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "#%ws#\n", g_excludeRegKey);
 	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "#%ws#\n", g_excludeFile);
 
-	//wcscpy(g_excludeRegKey, wRegKey);
-	//wcscpy(g_excludeFile, wExeName);
-
 	return TRUE;
 }
-
-// =========================================================================================
 
 _Function_class_(DRIVER_UNLOAD)
 VOID DriverUnload(PDRIVER_OBJECT DriverObject)

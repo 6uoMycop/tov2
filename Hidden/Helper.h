@@ -72,10 +72,6 @@ NTSYSAPI NTSTATUS NTAPI ZwQueryInformationProcess(
 	_Out_opt_ PULONG                    ReturnLength
 );
 
-NTSTATUS QuerySystemInformation(SYSTEM_INFORMATION_CLASS Class, PVOID* InfoBuffer, PSIZE_T InfoSize);
-NTSTATUS QueryProcessInformation(PROCESSINFOCLASS Class, HANDLE ProcessId, PVOID* InfoBuffer, PSIZE_T InfoSize);
-VOID FreeInformation(PVOID Buffer);
-
 #define NORMALIZE_INCREAMENT (USHORT)0x200
 
 NTSTATUS NormalizeDevicePath(PCUNICODE_STRING Path, PUNICODE_STRING Normalized);

@@ -6,5 +6,5 @@ NTSTATUS InitializeRegistryFilter(PDRIVER_OBJECT DriverObject);
 NTSTATUS DestroyRegistryFilter();
 
 NTSTATUS AddHiddenRegKey(PUNICODE_STRING KeyPath, PULONGLONG ObjId);
-NTSTATUS RemoveHiddenRegKey(ULONGLONG ObjId);
-NTSTATUS RemoveAllHiddenRegKeys();
+//NTSTATUS RemoveHiddenRegKey(ULONGLONG ObjId);
+//NTSTATUS RemoveAllHiddenRegKeys();

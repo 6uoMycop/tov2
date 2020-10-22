@@ -1,6 +1,5 @@
 #pragma once
 
-//#include <ntifs.h>
 #include <Ntddk.h>
 
 enum ExcludeObjectType {
@@ -31,7 +30,6 @@ NTSTATUS AddExcludeListRegistryValue(ExcludeContext Context, PUNICODE_STRING Val
 NTSTATUS RemoveExcludeListEntry(ExcludeContext Context, ExcludeEntryId EntryId);
 NTSTATUS RemoveAllExcludeListEntries(ExcludeContext Context);
 
-//BOOLEAN CheckExcludeListFile(ExcludeContext Context, PCUNICODE_STRING Path);
 BOOLEAN CheckExcludeListDirectory(ExcludeContext Context, PCUNICODE_STRING Path);
 BOOLEAN CheckExcludeListDirFile(ExcludeContext Context, PCUNICODE_STRING Dir, PCUNICODE_STRING File);
 

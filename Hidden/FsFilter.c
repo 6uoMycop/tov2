@@ -703,13 +703,6 @@ NTSTATUS CleanFileNamesInformation(PFILE_NAMES_INFORMATION info, PFLT_FILE_NAME_
 	return STATUS_SUCCESS;
 }
 
-VOID LoadConfigFilesCallback(PUNICODE_STRING Str, PVOID Params)
-{
-	ULONGLONG id;
-	UNREFERENCED_PARAMETER(Params);
-	AddHiddenFile(Str, &id);
-}
-
 NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
@@ -769,61 +762,4 @@ NTSTATUS DestroyFSMiniFilter()
 
 	_InfoPrint("Deitialization is completed");
 	return STATUS_SUCCESS;
-}
-
-NTSTATUS AddHiddenFile(PUNICODE_STRING FilePath, PULONGLONG ObjId)
-{
-	const USHORT maxBufSize = FilePath->Length + NORMALIZE_INCREAMENT;
-	UNICODE_STRING normalized;
-	NTSTATUS status;
-
-	normalized.Buffer = (PWCH)ExAllocatePoolWithTag(PagedPool, maxBufSize, FSFILTER_ALLOC_TAG);
-	normalized.Length = 0;
-	normalized.MaximumLength = maxBufSize;
-
-	if (!normalized.Buffer)
-	{
-		_InfoPrint("Error, can't allocate buffer");
-		return STATUS_MEMORY_NOT_ALLOCATED;
-	}
-
-	status = NormalizeDevicePath(FilePath, &normalized);
-	if (!NT_SUCCESS(status))
-	{
-		_InfoPrint("Path normalization failed with code:%08x, path:%wZ", status, FilePath);
-		ExFreePoolWithTag(normalized.Buffer, FSFILTER_ALLOC_TAG);
-		return status;
-	}
-
-	status = AddExcludeListFile(g_excludeFileContext, &normalized, ObjId, 0);
-	if (NT_SUCCESS(status))
-		_InfoPrint("Added hidden file:%wZ", &normalized);
-	else
-		_InfoPrint("Adding hidden file failed with code:%08x, path:%wZ", status, &normalized);
-
-	ExFreePoolWithTag(normalized.Buffer, FSFILTER_ALLOC_TAG);
-
-	return status;
-}
-
-NTSTATUS RemoveHiddenFile(ULONGLONG ObjId)
-{
-	NTSTATUS status = RemoveExcludeListEntry(g_excludeFileContext, ObjId);
-	if (NT_SUCCESS(status))
-		_InfoPrint("Hidden file is removed, id:%lld", ObjId);
-	else
-		_InfoPrint("Can't remove hidden file, code:%08x, id:%lld", status, ObjId);
-
-	return status;
-}
-
-NTSTATUS RemoveAllHiddenFiles()
-{
-	NTSTATUS status = RemoveAllExcludeListEntries(g_excludeFileContext);
-	if (NT_SUCCESS(status))
-		_InfoPrint("All hidden files are removed");
-	else
-		_InfoPrint("Can't remove all hidden files, code:%08x", status);
-
-	return status;
 }

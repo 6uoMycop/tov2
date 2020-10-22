@@ -1,6 +1,5 @@
 #include "ExcludeList.h"
 #include "Helper.h"
-//#include <Ntifs.h>
 
 #define EXCLUDE_ALLOC_TAG 'LcxE'
 
@@ -28,14 +27,6 @@ typedef struct _EXCLUDE_FILE_CONTEXT {
 NTSTATUS AddExcludeListEntry(ExcludeContext Context, PUNICODE_STRING FilePath, UINT32 Type, PExcludeEntryId EntryId, ExcludeEntryId ParentId);
 
 BOOLEAN FillDirectoryFromPath(PEXCULE_FILE_PATH path, PUNICODE_STRING filePath);
-
-unsigned int GetCrc32(void* buf, unsigned int size, unsigned int ivect);
-
-NTSTATUS RtlDowncaseUnicodeString(
-	PUNICODE_STRING  DestinationString,
-	_In_ PCUNICODE_STRING SourceString,
-	_In_ BOOLEAN          AllocateDestinationString
-);
 
 // ==========================================================================================
 
@@ -252,31 +243,6 @@ NTSTATUS RemoveAllExcludeListEntries(ExcludeContext Context)
 
 	return STATUS_SUCCESS;
 }
-
-//BOOLEAN CheckExcludeListFile(ExcludeContext Context, PCUNICODE_STRING Path)
-//{
-//	PEXCLUDE_FILE_CONTEXT cntx = (PEXCLUDE_FILE_CONTEXT)Context;
-//	PEXCLUDE_FILE_LIST_ENTRY entry;
-//	BOOLEAN result = FALSE;
-//
-//	ExAcquireFastMutex(&cntx->listLock);
-//
-//	entry = (PEXCLUDE_FILE_LIST_ENTRY)cntx->listHead.Flink;
-//	while (entry != (PEXCLUDE_FILE_LIST_ENTRY)&cntx->listHead)
-//	{
-//		if (RtlCompareUnicodeString(&entry->path.fullPath, Path, TRUE) == 0)
-//		{
-//			result = TRUE;
-//			break;
-//		}
-//
-//		entry = (PEXCLUDE_FILE_LIST_ENTRY)entry->list.Flink;
-//	}
-//
-//	ExReleaseFastMutex(&cntx->listLock);
-//
-//	return result;
-//}
 
 BOOLEAN CheckExcludeListDirectory(ExcludeContext Context, PCUNICODE_STRING Path)
 {
