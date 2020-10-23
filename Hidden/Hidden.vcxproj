@@ -20,10 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FsFilter.c" />
-    <ClCompile Include="Helper.c" />
     <ClCompile Include="RegFilter.c" />
     <ResourceCompile Include="Hidden.rc" />
-    <ClCompile Include="ExcludeList.c" />
     <ClCompile Include="Driver.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -121,10 +119,8 @@
     <FilesToPackage Include="@(Inf->'%(CopyOutput)')" Condition="'@(Inf)'!=''" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ExcludeList.h" />
     <ClInclude Include="FsFilter.h" />
     <ClInclude Include="Driver.h" />
-    <ClInclude Include="Helper.h" />
     <ClInclude Include="RegFilter.h" />
   </ItemGroup>
   <ItemGroup>

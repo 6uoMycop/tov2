@@ -1,11 +1,7 @@
-// =========================================================================================
-//       Filesystem Minifilter
-// =========================================================================================
-
 #include <fltKernel.h>
 #include <ntstrsafe.h>
+
 #include "FsFilter.h"
-#include "Helper.h"
 #include "Driver.h"
 
 #define FSFILTER_ALLOC_TAG 'DHlF'
@@ -27,24 +23,23 @@ CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
 };
 
 CONST FLT_REGISTRATION FilterRegistration = {
-	sizeof(FLT_REGISTRATION), //  Size
-	FLT_REGISTRATION_VERSION, //  Version
-	FLTFL_REGISTRATION_DO_NOT_SUPPORT_SERVICE_STOP,                        //  Flags
-	Contexts,                 //  Context
-	Callbacks,                //  Operation callbacks
-	/*FilterUnload*/NULL,     //  MiniFilterUnload
-	FilterSetup,              //  InstanceSetup
-	NULL,                     //  InstanceQueryTeardown
-	NULL,                     //  InstanceTeardownStart
-	NULL,                     //  InstanceTeardownComplete
-	NULL,                     //  GenerateFileName
-	NULL,                     //  GenerateDestinationFileName
-	NULL                      //  NormalizeNameComponent
+	sizeof(FLT_REGISTRATION),                       //  Size
+	FLT_REGISTRATION_VERSION,                       //  Version
+	FLTFL_REGISTRATION_DO_NOT_SUPPORT_SERVICE_STOP, //  Flags
+	Contexts,                                       //  Context
+	Callbacks,                                      //  Operation callbacks
+	/*FilterUnload*/NULL,                           //  MiniFilterUnload
+	FilterSetup,                                    //  InstanceSetup
+	NULL,                                           //  InstanceQueryTeardown
+	NULL,                                           //  InstanceTeardownStart
+	NULL,                                           //  InstanceTeardownComplete
+	NULL,                                           //  GenerateFileName
+	NULL,                                           //  GenerateDestinationFileName
+	NULL                                            //  NormalizeNameComponent
 };
 
 BOOLEAN g_fsMonitorInited = FALSE;
 PFLT_FILTER gFilterHandle = NULL;
-
 WCHAR g_excludeFile[BUFSIZE] = { 0 };
 UNICODE_STRING us_excludeFile;
 
@@ -54,8 +49,6 @@ NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS 
 	UNREFERENCED_PARAMETER(Flags);
 	UNREFERENCED_PARAMETER(VolumeDeviceType);
 	UNREFERENCED_PARAMETER(VolumeFilesystemType);
-
-	_InfoPrint("Attach to a new device (flags:%x, device:%d, fs:%d)", (ULONG)Flags, (ULONG)VolumeDeviceType, (ULONG)VolumeFilesystemType);
 
 	return STATUS_SUCCESS;
 }
@@ -67,8 +60,6 @@ FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_
 	
 	if (!IsDriverEnabled())
 		return FLT_POSTOP_FINISHED_PROCESSING;
-
-	//_InfoPrint("FltDirCtrlPreOperation: %wZ", &Data->Iopb->TargetFileObject->FileName);
 
 	if (Data->Iopb->MinorFunction != IRP_MN_QUERY_DIRECTORY)
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -164,14 +155,13 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 		RtlUnicodeStringCat(&fullName, &fileName);
 
 		if (!(info->FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-		{
 			matched = (RtlCompareUnicodeString(&fullName, &us_excludeFile, TRUE) == 0) ? TRUE : FALSE;
-			_InfoPrint("%ws: %wZ", matched ? L"TRUE" : L"FALSE", &fullName);
-		}
 
 		if (matched)
 		{
 			BOOLEAN retn = FALSE;
+
+			_InfoPrint("%wZ", &fullName);
 
 			if (prevInfo != NULL)
 			{
@@ -202,7 +192,7 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 					}
 
 					moveLength += FIELD_OFFSET(FILE_ID_BOTH_DIR_INFORMATION, FileName) + nextInfo->FileNameLength;
-					RtlMoveMemory(info, (PUCHAR)info + info->NextEntryOffset, moveLength);//continue
+					RtlMoveMemory(info, (PUCHAR)info + info->NextEntryOffset, moveLength);
 				}
 				else
 				{
@@ -236,8 +226,6 @@ NTSTATUS CleanFileIdBothDirectoryInformation(PFILE_ID_BOTH_DIR_INFORMATION info,
 NTSTATUS InitializeFSMiniFilter(PDRIVER_OBJECT DriverObject)
 {
 	NTSTATUS status;
-
-	// Filesystem mini-filter initialization
 
 	status = FltRegisterFilter(DriverObject, &FilterRegistration, &gFilterHandle);
 	if (NT_SUCCESS(status))

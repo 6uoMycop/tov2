@@ -1,11 +1,9 @@
 #include <fltKernel.h>
-#include <Ntddk.h>
 #include <stdlib.h>
 
 #include "RegFilter.h"
 #include "FsFilter.h"
 #include "Driver.h"
-#include "Helper.h"
 
 #define DRIVER_ALLOC_TAG 'nddH'
 
