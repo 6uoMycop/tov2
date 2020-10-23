@@ -92,8 +92,7 @@ NTSTATUS RegPostEnumKey(PVOID context, PREG_POST_OPERATION_INFORMATION info)
 		_InfoPrint("Registry key is going to be hidden in: %wZ", regPath);
 
 		HANDLE Key;
-		ULONG resLen, i;
-		BOOLEAN infinite = TRUE;
+		ULONG resLen;
 		PVOID tempBuffer;
 
 		status = ObOpenObjectByPointer(info->Object, OBJ_KERNEL_HANDLE, NULL, KEY_ALL_ACCESS, *CmKeyObjectType, KernelMode, &Key);
@@ -106,7 +105,7 @@ NTSTATUS RegPostEnumKey(PVOID context, PREG_POST_OPERATION_INFORMATION info)
 		tempBuffer = (LPWSTR)ExAllocatePoolWithTag(PagedPool, preInfo->Length, FILTER_ALLOC_TAG);
 		if (tempBuffer)
 		{
-			for (i = 0; infinite; i++)
+			for (int i = 0;; i++)
 			{
 				status = ZwEnumerateKey(Key, preInfo->Index + 1, preInfo->KeyInformationClass, tempBuffer, preInfo->Length, &resLen);
 				if (!NT_SUCCESS(status))
@@ -128,6 +127,7 @@ NTSTATUS RegPostEnumKey(PVOID context, PREG_POST_OPERATION_INFORMATION info)
 						_InfoPrint("Warning, can't copy new key information");
 					}
 
+					status = STATUS_SUCCESS;
 					break;
 				}
 			}

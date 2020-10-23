@@ -53,11 +53,11 @@ NTSTATUS FilterSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS 
 	return STATUS_SUCCESS;
 }
 
-FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID *CompletionContext)
+FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID* CompletionContext)
 {
 	UNREFERENCED_PARAMETER(FltObjects);
 	UNREFERENCED_PARAMETER(CompletionContext);
-	
+
 	if (!IsDriverEnabled())
 		return FLT_POSTOP_FINISHED_PROCESSING;
 
@@ -72,12 +72,10 @@ FLT_PREOP_CALLBACK_STATUS FltDirCtrlPreOperation(PFLT_CALLBACK_DATA Data, PCFLT_
 	case FileDirectoryInformation:
 	case FileFullDirectoryInformation:
 	case FileNamesInformation:
-		break;
+		return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 	default:
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 	}
-
-	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
 
 FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID CompletionContext, FLT_POST_OPERATION_FLAGS Flags)
@@ -107,12 +105,8 @@ FLT_POSTOP_CALLBACK_STATUS FltDirCtrlPostOperation(PFLT_CALLBACK_DATA Data, PCFL
 	{
 		status = STATUS_SUCCESS;
 
-		switch (params->DirectoryControl.QueryDirectory.FileInformationClass)
-		{
-		case FileIdBothDirectoryInformation:
+		if (params->DirectoryControl.QueryDirectory.FileInformationClass == FileIdBothDirectoryInformation)
 			status = CleanFileIdBothDirectoryInformation((PFILE_ID_BOTH_DIR_INFORMATION)params->DirectoryControl.QueryDirectory.DirectoryBuffer, fltName);
-			break;
-		}
 
 		Data->IoStatus.Status = status;
 	}
